@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.20-alpine AS builder
+FROM golang:1.20 AS builder
 
-RUN apk --no-cache add git openssh
+RUN apt update && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y git && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY /go.mod /src/go.mod
 COPY /go.sum /src/go.sum
@@ -36,7 +38,7 @@ RUN mkdir -p /var/run/vars && \
         -ldflags "-X main.GitRepo=$(cat /var/run/vars/GIT_REPO) -X main.GitTag=$(cat /var/run/vars/GIT_LAST_TAG) -X main.GitCommit=$(cat /var/run/vars/GIT_HEAD_COMMIT) -X main.GitDirty=$(cat /var/run/vars/GIT_MODIFIED) -X \"main.GitCommitDate=$(cat /var/run/vars/GIT_DATE_LAST_COMMIT)\"" \
         -o fs/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-alpine:2.7
+FROM haproxytech/haproxy-debian:2.9
 
 ARG TARGETPLATFORM
 
@@ -46,7 +48,9 @@ ENV S6_READ_ONLY_ROOT=1
 
 COPY /fs /
 
-RUN apk --no-cache add socat openssl util-linux htop tzdata curl libcap && \
+RUN apt update && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y socat openssl util-linux htop tzdata curl libcap2-bin && \
+    rm -rf /var/lib/apt/lists/* && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi && \
     chgrp -R haproxy /usr/local/etc/haproxy /run /var && \
     chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
