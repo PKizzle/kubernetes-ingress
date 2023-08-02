@@ -3,7 +3,7 @@
 if [ ! -f /var/run/s6/services/.s6-svscan/SIGUSR1 ]; then
     cat > /var/run/s6/services/.s6-svscan/SIGUSR1 <<EOF
 #!/bin/sh
-kill -SIGTERM 1
+kill -s TERM 1
 EOF
     chmod +x /var/run/s6/services/.s6-svscan/SIGUSR1
 fi
