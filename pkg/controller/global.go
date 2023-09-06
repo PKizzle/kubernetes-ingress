@@ -16,7 +16,6 @@ package controller
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/go-test/deep"
 
@@ -27,7 +26,6 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/certs"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/env"
 	"github.com/haproxytech/kubernetes-ingress/pkg/ingress"
-	"github.com/haproxytech/kubernetes-ingress/pkg/k8s"
 	"github.com/haproxytech/kubernetes-ingress/pkg/service"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
 )
@@ -174,7 +172,7 @@ func (c *HAProxyController) handleDefaultService() (reload bool) {
 		SvcName:          name,
 		IsDefaultBackend: true,
 	}
-	if svc, err = service.New(c.store, ingressPath, nil, false, "", "", c.store.ConfigMaps.Main.Annotations); err == nil {
+	if svc, err = service.New(c.store, ingressPath, nil, false, nil, c.store.ConfigMaps.Main.Annotations); err == nil {
 		reload, err = svc.SetDefaultBackend(c.store, c.haproxy, []string{c.haproxy.FrontHTTP, c.haproxy.FrontHTTPS}, c.annotations)
 	}
 	if err != nil {
@@ -183,7 +181,7 @@ func (c *HAProxyController) handleDefaultService() (reload bool) {
 	return reload
 }
 
-func populateDefaultLocalBackendResources(k8sStore store.K8s, eventChan chan k8s.SyncDataEvent, podNs string, defaultBackendPort int) error {
+func populateDefaultLocalBackendResources(k8sStore store.K8s, podNs string, defaultBackendPort int) error {
 	controllerNs, ok := k8sStore.Namespaces[podNs]
 	if !ok {
 		return fmt.Errorf("controller namespace '%s' not found", podNs)
@@ -192,10 +190,10 @@ func populateDefaultLocalBackendResources(k8sStore store.K8s, eventChan chan k8s
 	defaultLocalService := controllerNs.Services[store.DefaultLocalBackend]
 	if defaultLocalService == nil {
 		item := &store.Service{
-			Namespace:   podNs,
-			Name:        store.DefaultLocalBackend,
-			Status:      store.ADDED,
-			Annotations: k8sStore.ConfigMaps.Main.Annotations,
+			Namespace: podNs,
+			Name:      store.DefaultLocalBackend,
+			Status:    store.ADDED,
+
 			Ports: []store.ServicePort{
 				{
 					Name:     "http",
@@ -205,14 +203,9 @@ func populateDefaultLocalBackendResources(k8sStore store.K8s, eventChan chan k8s
 				},
 			},
 		}
-		eventProcessed := make(chan struct{})
-		eventChan <- k8s.SyncDataEvent{SyncType: k8s.SERVICE, Namespace: item.Namespace, Data: item, EventProcessed: eventProcessed}
-		timerService := time.NewTimer(time.Second)
-		defer timerService.Stop()
-		select {
-		case <-timerService.C:
-		case <-eventProcessed:
-		}
+		k8sStore.EventService(controllerNs, item)
+		logger.Debug("default backend event service processed")
+
 		endpoints := &store.Endpoints{
 			Namespace: podNs,
 			Service:   store.DefaultLocalBackend,
@@ -225,14 +218,8 @@ func populateDefaultLocalBackendResources(k8sStore store.K8s, eventChan chan k8s
 				},
 			},
 		}
-		eventProcessed = make(chan struct{})
-		eventChan <- k8s.SyncDataEvent{SyncType: k8s.ENDPOINTS, Namespace: endpoints.Namespace, Data: endpoints, EventProcessed: eventProcessed}
-		timerEndpoints := time.NewTimer(time.Second)
-		defer timerEndpoints.Stop()
-		select {
-		case <-timerEndpoints.C:
-		case <-eventProcessed:
-		}
+		k8sStore.EventEndpoints(controllerNs, endpoints, nil)
+		logger.Debug("default backend event endpoints processed")
 	} else {
 		defaultLocalService.Annotations = k8sStore.ConfigMaps.Main.Annotations
 	}
@@ -244,7 +231,7 @@ func (c *HAProxyController) handleDefaultLocalService() (reload bool) {
 		err error
 		svc *service.Service
 	)
-	err = populateDefaultLocalBackendResources(c.store, c.eventChan, c.podNamespace, c.osArgs.DefaultBackendPort)
+	err = populateDefaultLocalBackendResources(c.store, c.podNamespace, c.osArgs.DefaultBackendPort)
 	if err != nil {
 		logger.Error(err)
 		return
@@ -256,7 +243,7 @@ func (c *HAProxyController) handleDefaultLocalService() (reload bool) {
 		IsDefaultBackend: true,
 	}
 
-	if svc, err = service.New(c.store, ingressPath, nil, false, "", ""); err == nil {
+	if svc, err = service.New(c.store, ingressPath, nil, false, nil, c.store.ConfigMaps.Main.Annotations); err == nil {
 		reload, err = svc.SetDefaultBackend(c.store, c.haproxy, []string{c.haproxy.FrontHTTP, c.haproxy.FrontHTTPS}, c.annotations)
 	}
 	if err != nil {
