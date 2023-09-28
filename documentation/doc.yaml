@@ -1790,6 +1790,8 @@ annotations:
         to 50s
     applies_to:
       - configmap
+      - ingress
+      - service
     version_min: "1.4"
     example: ["timeout-server: 5s"]
   - title: timeout-server-fin

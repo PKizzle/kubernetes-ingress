@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package configsnippet_test
+package timeoutserver
 
 import (
 	"testing"
@@ -31,16 +31,16 @@ var (
 	configMapName      = "haproxy-kubernetes-ingress"
 )
 
-type DisableConfigSnippetSuite struct {
+type TimeoutServerSuite struct {
 	integration.BaseSuite
 }
 
-func TestDisableConfigSnippet(t *testing.T) {
+func TestTimeoutServer(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(DisableConfigSnippetSuite))
+	suite.Run(t, new(TimeoutServerSuite))
 }
 
-func (suite *DisableConfigSnippetSuite) BeforeTest(suiteName, testName string) {
+func (suite *TimeoutServerSuite) BeforeTest(suiteName, testName string) {
 	suite.BaseSuite.BeforeTest(suiteName, testName)
 	// Add any needed update to the controller setting
 	// by updating suite.TestControllers[suite.T().Name()].XXXXX
@@ -49,18 +49,32 @@ func (suite *DisableConfigSnippetSuite) BeforeTest(suiteName, testName string) {
 	testController.OSArgs.ConfigMap.Namespace = configMapNamespace
 }
 
-func (suite *DisableConfigSnippetSuite) setupTest() {
+func newConfigMap() *store.ConfigMap {
+	return &store.ConfigMap{
+		Annotations: map[string]string{},
+		Namespace:   configMapNamespace,
+		Name:        configMapName,
+		Status:      store.ADDED,
+	}
+}
+
+func (suite *TimeoutServerSuite) setupTest() *store.ConfigMap {
 	testController := suite.TestControllers[suite.T().Name()]
 
 	ns := store.Namespace{Name: appNs, Status: store.ADDED}
+	cm := newConfigMap()
 	testController.EventChan <- k8s.SyncDataEvent{SyncType: k8s.NAMESPACE, Namespace: ns.Name, Data: &ns}
+	testController.EventChan <- k8s.SyncDataEvent{
+		SyncType: k8s.CONFIGMAP, Namespace: configMapNamespace, Name: configMapName, Data: newConfigMap(),
+	}
 	testController.EventChan <- k8s.SyncDataEvent{SyncType: k8s.COMMAND}
 	controllerHasWorked := make(chan struct{})
 	testController.EventChan <- k8s.SyncDataEvent{SyncType: k8s.COMMAND, EventProcessed: controllerHasWorked}
 	<-controllerHasWorked
+	return cm
 }
 
-func (suite *DisableConfigSnippetSuite) disableConfigSnippetFixture(events ...k8s.SyncDataEvent) {
+func (suite *TimeoutServerSuite) fixture(events ...k8s.SyncDataEvent) {
 	testController := suite.TestControllers[suite.T().Name()]
 
 	// Now sending store events for test setup

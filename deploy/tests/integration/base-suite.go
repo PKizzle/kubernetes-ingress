@@ -6,7 +6,7 @@
 //
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, softwarehaproxyConfig
+// Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
@@ -15,7 +15,10 @@
 package integration
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/haproxytech/kubernetes-ingress/pkg/annotations"
 	c "github.com/haproxytech/kubernetes-ingress/pkg/controller"
@@ -163,4 +166,15 @@ func (suite *BaseSuite) StopController() {
 	testController.Controller.Stop()
 	testController.Store.Clean()
 	close(testController.EventChan)
+}
+
+func (suite *BaseSuite) ExpectHaproxyConfigContains(s string, count int) {
+	testController := suite.TestControllers[suite.T().Name()]
+
+	content, err := os.ReadFile(filepath.Join(testController.TempDir, "haproxy.cfg"))
+	if err != nil {
+		suite.T().Error(err.Error())
+	}
+	c := strings.Count(string(content), s)
+	suite.Exactly(count, c, fmt.Sprintf("%s is repeated %d times but expected %d", s, c, count))
 }

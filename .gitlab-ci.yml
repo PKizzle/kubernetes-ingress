@@ -4,14 +4,14 @@ stages:
   - unit-tests
   - build
   - e2e-tests
-  - e2e_k8s_25
   - e2e_k8s_26
   - e2e_k8s_27
+  - e2e_k8s_28
 variables:
   KIND: v0.20.0
   DOCKER_HOST: tcp://docker:2375
   DOCKER_DRIVER: overlay2
-  GO_VERSION: "1.20"
+  GO_VERSION: "1.21"
   DOCKER_VERSION: "24.0"
 diff:
   stage: diff
@@ -204,12 +204,11 @@ docker-build-sch:
     - kind delete cluster --name=dev
   parallel:
     matrix:
-      - TEST_PART: [ "18#e2e_parallel", "18#e2e_https", "1#e2e_sequential" ]
+      - TEST_PART: ["parallel", "https", "sequential-1", "sequential-2"]
   script:
     - CI_ENV=gitlab deploy/tests/create.sh
     - kubectl get pods -A
-    - IFS='#' read -r -a array <<< $TEST_PART; echo "running tests with -p ${array[0]} --tags=${array[1]}"
-    - IFS='#' read -r -a array <<< $TEST_PART; KIND_URL=docker CGO_ENABLED=0 go test -v -p ${array[0]} ./deploy/tests/e2e/... --tags=${array[1]}
+    - echo "running make -f Makefile.ci ci-e2e-$TEST_PART tests" && make -f Makefile.ci ci-e2e-$TEST_PART
 .kind_deployment_schedules:
   needs: ["docker-build-sch"]
   rules:
@@ -222,14 +221,6 @@ docker-build-sch:
     expire_in: 60 minutes
     exclude:
       - tar/*
-e2e_k8s_25:
-  stage: e2e_k8s_25
-  needs: ["docker-build"]
-  variables:
-    K8S_VERSION: v1.25.11
-    KUBEADM_VER: v1beta3
-    KUBECTL: v1.26.3
-  extends: .kind_deployment_schedules
 e2e_k8s_26:
   stage: e2e_k8s_26
   needs: ["docker-build"]
@@ -245,4 +236,12 @@ e2e_k8s_27:
     K8S_VERSION: v1.27.3
     KUBEADM_VER: v1beta3
     KUBECTL: v1.27.0
+  extends: .kind_deployment_schedules
+e2e_k8s_28:
+  stage: e2e_k8s_28
+  needs: ["docker-build"]
+  variables:
+    K8S_VERSION: v1.28.0
+    KUBEADM_VER: v1beta3
+    KUBECTL: v1.28.0
   extends: .kind_deployment
