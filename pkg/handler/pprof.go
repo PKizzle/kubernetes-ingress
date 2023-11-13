@@ -19,6 +19,7 @@ import (
 
 	"github.com/haproxytech/kubernetes-ingress/pkg/annotations"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy"
+	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
 	"github.com/haproxytech/kubernetes-ingress/pkg/route"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
 )
@@ -27,7 +28,7 @@ const pprofBackend = "pprof"
 
 type Pprof struct{}
 
-func (handler Pprof) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (reload bool, err error) {
+func (handler Pprof) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
 	k.BackendsWithNoConfigSnippets[pprofBackend] = struct{}{}
 	_, err = h.BackendGet(pprofBackend)
 	if err != nil {
@@ -57,6 +58,6 @@ func (handler Pprof) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annota
 	if err != nil {
 		return
 	}
-	reload = true
+	instance.Reload("pprof backend created")
 	return
 }

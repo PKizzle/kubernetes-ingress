@@ -25,10 +25,16 @@ import (
 func (k *K8s) EventNamespace(ns *Namespace, data *Namespace) (updateRequired bool) {
 	updateRequired = false
 	switch data.Status {
-	case ADDED, MODIFIED:
+	case ADDED:
 		nsStore := k.GetNamespace(data.Name)
 		nsStore.Labels = utils.CopyMap(data.Labels)
 		updateRequired = true
+	case MODIFIED:
+		nsStore := k.GetNamespace(data.Name)
+		updateRequired = !EqualMap(nsStore.Labels, data.Labels)
+		if updateRequired {
+			nsStore.Labels = utils.CopyMap(data.Labels)
+		}
 	case DELETED:
 		_, ok := k.Namespaces[data.Name]
 		if ok {
@@ -106,6 +112,9 @@ func (k *K8s) EventEndpoints(ns *Namespace, data *Endpoints, syncHAproxySrvs fun
 	}
 	if endpoints, ok := ns.Endpoints[data.Service][data.SliceName]; ok {
 		if data.Status != DELETED && endpoints.Equal(data) {
+			if data != nil {
+				logger.Tracef("[RUNTIME] [BACKEND] [SERVER] [No change] [EventEndpoints]. No change for %s %s %s", data.Status, data.Service, data.SliceName)
+			}
 			return false
 		}
 	}
@@ -204,6 +213,9 @@ func (k *K8s) EventConfigMap(ns *Namespace, data *ConfigMap) (updateRequired boo
 		updateRequired = true
 		logger.Debugf("configmap '%s/%s' processed", cm.Namespace, cm.Name)
 	case MODIFIED:
+		if cm.Equal(data) {
+			return false
+		}
 		*cm = *data
 		updateRequired = true
 		logger.Infof("configmap '%s/%s' updated", cm.Namespace, cm.Name)
@@ -258,10 +270,17 @@ func (k *K8s) EventSecret(ns *Namespace, data *Secret) (updateRequired bool) {
 }
 
 func (k *K8s) EventPod(podEvent PodEvent) (updateRequired bool) {
-	if podEvent.Created {
-		k.NbrHAProxyInst++
-	} else {
-		k.NbrHAProxyInst--
+	switch podEvent.Status {
+	case ADDED, MODIFIED:
+		if _, ok := k.HaProxyPods[podEvent.Name]; ok {
+			return false
+		}
+		k.HaProxyPods[podEvent.Name] = struct{}{}
+	case DELETED:
+		if _, ok := k.HaProxyPods[podEvent.Name]; !ok {
+			return false
+		}
+		delete(k.HaProxyPods, podEvent.Name)
 	}
 
 	return true
@@ -315,11 +334,13 @@ func (k *K8s) EventPublishService(ns *Namespace, data *Service) (updateRequired 
 		oldService.Addresses = newService.Addresses
 		k.PublishServiceAddresses = newService.Addresses
 		k.UpdateAllIngresses = true
+		updateRequired = true
 	case ADDED:
 		if service, ok := ns.Services[data.Name]; ok {
 			k.PublishServiceAddresses = data.Addresses
 			service.Addresses = data.Addresses
 			k.UpdateAllIngresses = true
+			updateRequired = true
 			return
 		}
 		logger.Errorf("Publish service '%s/%s' not found", data.Namespace, data.Name)
@@ -329,6 +350,7 @@ func (k *K8s) EventPublishService(ns *Namespace, data *Service) (updateRequired 
 			k.PublishServiceAddresses = nil
 			service.Addresses = nil
 			k.UpdateAllIngresses = true
+			updateRequired = true
 		} else {
 			logger.Warningf("Publish service '%s/%s' not registered with controller, cannot delete !", data.Namespace, data.Name)
 		}
