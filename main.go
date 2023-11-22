@@ -126,6 +126,8 @@ func main() {
 	isGatewayAPIInstalled := k.IsGatewayAPIInstalled(osArgs.GatewayControllerName)
 
 	c.SetGatewayAPIInstalled(isGatewayAPIInstalled)
+	
+	// c.InitAuxCfgWatcher()
 
 	go k.MonitorChanges(eventChan, stop, osArgs, isGatewayAPIInstalled)
 	go c.Start()
