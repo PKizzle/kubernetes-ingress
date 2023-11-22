@@ -12,20 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.21 AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.21 AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+ARG GOOS=$TARGETOS
+ARG GOARCH=$TARGETARCH
+
+WORKDIR /go/src/github.com/haproxytech/kubernetes-ingress
 
 RUN apt update && \
     DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y git && \
     rm -rf /var/lib/apt/lists/*
 
-COPY /go.mod /src/go.mod
-COPY /go.sum /src/go.sum
-RUN cd /src && go mod download
+RUN --mount=type=bind,target=/go/src/github.com/haproxytech/kubernetes-ingress/go.mod,src=./go.mod \
+    --mount=type=bind,target=/go/src/github.com/haproxytech/kubernetes-ingress/go.sum,src=./go.sum \
+    --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-COPY / /src
-
-RUN mkdir -p /var/run/vars && \
-    cd /src && \
+ENV CGO_ENABLED=0
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    mkdir -p /var/run/vars && \
     git config --get remote.origin.url > /var/run/vars/GIT_REPO && \
     git rev-parse --short HEAD > /var/run/vars/GIT_HEAD_COMMIT && \
     git log -1 --date=format:"%Y/%m/%d %T" --format="%ad" > /var/run/vars/GIT_DATE_LAST_COMMIT && \
@@ -34,11 +45,11 @@ RUN mkdir -p /var/run/vars && \
     git diff $(cat /var/run/vars/GIT_HEAD_COMMIT) $(cat /var/run/vars/GIT_TAG_COMMIT) --quiet > /var/run/vars/GIT_MODIFIED1 || echo '.dev' > /var/run/vars/GIT_MODIFIED1 && \
     git diff --quiet > /var/run/vars/GIT_MODIFIED2 || echo '.dirty' > /var/run/vars/GIT_MODIFIED2 && \
     cat /var/run/vars/GIT_MODIFIED1 /var/run/vars/GIT_MODIFIED2 | tr -d '\n' > /var/run/vars/GIT_MODIFIED && \
-    CGO_ENABLED=0 go build \
+    GOARM="${TARGETVARIANT#v}" go build \
         -ldflags "-X pkg.version.GitRepo=$(cat /var/run/vars/GIT_REPO) -X pkg.version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG) -X pkg.version.GitCommit=$(cat /var/run/vars/GIT_HEAD_COMMIT) -X pkg.version.GitDirty=$(cat /var/run/vars/GIT_MODIFIED) -X \"pkg.version.GitCommitDate=$(cat /var/run/vars/GIT_DATE_LAST_COMMIT)\"" \
-        -o fs/haproxy-ingress-controller .
+        -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-debian:2.9-dev6
+FROM haproxytech/haproxy-debian:2.9-dev10
 
 ARG TARGETPLATFORM
 
@@ -75,6 +86,6 @@ RUN apt update && \
     chmod ugo+x /etc/services.d/*/run /etc/cont-init.d/* && \
     rm -rf /var/lib/pebble
 
-COPY --from=builder /src/fs/haproxy-ingress-controller .
+COPY --from=builder /go/haproxy-ingress-controller .
 
 ENTRYPOINT ["/start.sh"]
