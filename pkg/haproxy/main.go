@@ -91,7 +91,7 @@ func New(osArgs utils.OSArgs, env env.Env, cfgFile []byte, p process.Process, cl
 	return
 }
 
-func (h HAProxy) ConnectToAPI() (err error) {
+func (h *HAProxy) ConnectToAPI() (err error) {
 	if h.HAProxyClient == nil {
 		timer := time.NewTimer(h.Env.HaproxyStartupTime)
 		_, errStat := os.Stat(h.RuntimeSocket)

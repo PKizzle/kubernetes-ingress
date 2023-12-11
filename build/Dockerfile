@@ -49,43 +49,48 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         -ldflags "-X pkg.version.GitRepo=$(cat /var/run/vars/GIT_REPO) -X pkg.version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG) -X pkg.version.GitCommit=$(cat /var/run/vars/GIT_HEAD_COMMIT) -X pkg.version.GitDirty=$(cat /var/run/vars/GIT_MODIFIED) -X \"pkg.version.GitCommitDate=$(cat /var/run/vars/GIT_DATE_LAST_COMMIT)\"" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-debian:2.9-dev10
+FROM haproxytech/haproxy-debian:2.8.4
 
 ARG TARGETPLATFORM
 
-ARG S6_OVERLAY_VERSION=2.2.0.3
+ARG S6_OVERLAY_VERSION=3.1.6.2
 ENV S6_OVERLAY_VERSION $S6_OVERLAY_VERSION
 ENV S6_READ_ONLY_ROOT=1
+ENV S6_USER=haproxy
+ENV S6_GROUP=haproxy
 
 COPY /fs /
 
 RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y socat openssl util-linux htop tzdata curl libcap2-bin && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y socat openssl util-linux htop tzdata curl libcap2-bin xz-utils && \
     rm -rf /var/lib/apt/lists/* && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi && \
     chgrp -R haproxy /usr/local/etc/haproxy /run /var && \
     chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
     setcap 'cap_net_bind_service=+ep' /usr/local/sbin/haproxy && \
     case "${TARGETPLATFORM}" in \
-        "linux/arm64")      S6_ARCH=aarch64     ;; \
-        "linux/amd64")      S6_ARCH=amd64       ;; \
-        "linux/arm/v6")     S6_ARCH=arm         ;; \
-        "linux/arm/v7")     S6_ARCH=armhf       ;; \
-        "linux/ppc64le")    S6_ARCH=ppc64le     ;; \
-        "linux/386")        S6_ARCH=x86         ;; \
+        "linux/arm64")      S6_ARCH=aarch64      ;; \
+        "linux/amd64")      S6_ARCH=x86_64       ;; \
+        "linux/arm/v6")     S6_ARCH=arm          ;; \
+        "linux/arm/v7")     S6_ARCH=armhf        ;; \
+        "linux/ppc64")      S6_ARCH=powerpc64    ;; \
+        "linux/ppc64le")    S6_ARCH=powerpc64le  ;; \
+        "linux/486")        S6_ARCH=i486         ;; \
+        "linux/686")        S6_ARCH=i686         ;; \
         *) echo "ARG TARGETPLATFORM undeclared" >&2 && exit 1 ;; \
     esac && \
-    curl -sS -L -o /tmp/s6-overlay-installer "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}-installer" && \
-    chmod +x /tmp/s6-overlay-installer && \
-    /tmp/s6-overlay-installer / && \
-    rm -f /tmp/s6-overlay-installer && \
-    mkdir /var/run/s6 && \
-    chown haproxy:haproxy /var/run/s6 && \
-    chmod ug+rwx /var/run/s6 && \
-    sed -i 's/ root / haproxy /g' /etc/s6/init/init-stage2-fixattrs.txt && \
-    chmod ugo+x /etc/services.d/*/run /etc/cont-init.d/* && \
+    curl -sS -L -o /tmp/s6-overlay-scripts.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" && \
+    tar -C / -Jxpf /tmp/s6-overlay-scripts.tar.xz && \
+    curl -sS -L -o /tmp/s6-overlay-binaries.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" && \
+    tar -C / -Jxpf /tmp/s6-overlay-binaries.tar.xz && \
+    rm -f /tmp/s6-overlay-scripts.tar.xz /tmp/s6-overlay-binaries.tar.xz && \
+    chown -R haproxy:haproxy /init /etc/s6-overlay && \
+    chmod u+x /etc/s6-overlay/scripts/* && \
+    chmod +s /init && \
     rm -rf /var/lib/pebble
 
 COPY --from=builder /go/haproxy-ingress-controller .
+
+VOLUME [ "/run" ]
 
 ENTRYPOINT ["/start.sh"]
