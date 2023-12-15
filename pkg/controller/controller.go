@@ -51,7 +51,6 @@ type HAProxyController struct {
 	updateHandlers           []UpdateHandler
 	store                    store.K8s
 	osArgs                   utils.OSArgs
-	// auxCfgWatcher           *fsnotify.Watcher
 	auxCfgModTime            int64
 	ready                    bool
 	cfgFirstUpdateComplete   bool
@@ -77,22 +76,11 @@ func (c *HAProxyController) clientAPIClosure(fn func() error) (err error) {
 	return nil
 }
 
-// func (c *HAProxyController) InitAuxCfgWatcher() {
-// 	auxCfgWatcher, errWatcher := fsnotify.NewWatcher()
-// 	if errWatcher != nil {
-// 		logger.Panicf("unable to initialize fnotify to detect auxiliary configuration file changes: %s", errWatcher)
-// 	}
-// 	c.auxCfgWatcher = auxCfgWatcher
-// 	defer c.auxCfgWatcher.Close()
-// 	c.auxCfgWatcher.Add(filepath.Dir(c.haproxy.AuxCFGFile))
-// }
-
 // Start initializes and runs HAProxyController
 func (c *HAProxyController) Start() {
 	c.initHandlers()
 	logger.Error(c.setupHAProxyRules())
 	logger.Error(os.Chdir(c.haproxy.Env.CfgDir))
-	// c.auxCfgManagerNew()
 	if !c.cfgFirstUpdateComplete {
 		c.cfgFirstUpdateComplete = true
 		c.updateHAProxy()

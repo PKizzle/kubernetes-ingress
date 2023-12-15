@@ -132,24 +132,3 @@ func (c *HAProxyController) auxCfgManager() {
 	useAuxFile = true
 	modifTime = info.ModTime().Unix()
 }
-
-// func (c *HAProxyController) auxCfgManagerNew() {
-// 	for {
-// 		select {
-// 		case event, ok := <-c.auxCfgWatcher.Events:
-// 			if !ok {
-// 				return
-// 			}
-// 			if event.Name == c.haproxy.AuxCFGFile {
-// 				instance.RestartIf(event.Op == fsnotify.Create, "auxiliary configuration file created")
-// 				instance.ReloadIf(event.Op == fsnotify.Write, "auxiliary configuration file modified")
-// 				instance.RestartIf(event.Op == fsnotify.Remove, "auxiliary configuration file removed")
-// 			}
-// 		case err, ok := <-c.auxCfgWatcher.Errors:
-// 			if !ok {
-// 				return
-// 			}
-// 			logger.Errorf("Error occurred in fsnotify watcher: %v", err)
-// 		}
-// 	}
-// }
