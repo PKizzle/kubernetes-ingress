@@ -13,7 +13,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
 
-	"github.com/haproxytech/client-native/v3/models"
+	"github.com/haproxytech/client-native/v5/models"
 
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
@@ -716,7 +716,7 @@ func getServiceAddresses(service *corev1.Service) (addresses []string) {
 		addresses = []string{service.Spec.ClusterIP}
 		addresses = append(addresses, service.Spec.ExternalIPs...)
 	case corev1.ServiceTypeNodePort:
-		if service.Spec.ClusterIP == "" {
+		if service.Spec.ClusterIP != "" {
 			addresses = append(addresses, service.Spec.ClusterIP)
 		}
 		addresses = append(addresses, service.Spec.ExternalIPs...)
