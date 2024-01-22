@@ -55,6 +55,7 @@ type HAProxyController struct {
 	ready                    bool
 	cfgFirstUpdateComplete   bool
 	updateStatusManager      status.UpdateStatusManager
+	beforeUpdateHandlers     []UpdateHandler
 }
 
 // Wrapping a Native-Client transaction and commit it.
@@ -127,6 +128,11 @@ func (c *HAProxyController) updateHAProxy() {
 			Ingress: nil,
 		}).
 		Process(c.store, c.store.ConfigMaps.Main.Annotations))
+
+	for _, handler := range c.beforeUpdateHandlers {
+		err = handler.Update(c.store, c.haproxy, c.annotations)
+		logger.Error(err)
+	}
 
 	for _, namespace := range c.store.Namespaces {
 		if !namespace.Relevant {
