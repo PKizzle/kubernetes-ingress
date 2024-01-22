@@ -1,5 +1,6 @@
 /start.sh
 /init
+/etc/passwd
 /usr/bin/dash
 /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
 /etc/ld.so.cache

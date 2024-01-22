@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=${BUILDPLATFORM} golang:1.21-alpine AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.21 AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -23,8 +23,9 @@ ARG GOARCH=$TARGETARCH
 
 WORKDIR /go/src/github.com/haproxytech/kubernetes-ingress
 
-RUN apk update && \
-    apk --no-cache add git
+RUN apt update && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y git && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN --mount=type=bind,target=/go/src/github.com/haproxytech/kubernetes-ingress/go.mod,src=./go.mod \
     --mount=type=bind,target=/go/src/github.com/haproxytech/kubernetes-ingress/go.sum,src=./go.sum \
@@ -48,7 +49,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         -ldflags "-X pkg.version.GitRepo=$(cat /var/run/vars/GIT_REPO) -X pkg.version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG) -X pkg.version.GitCommit=$(cat /var/run/vars/GIT_HEAD_COMMIT) -X pkg.version.GitDirty=$(cat /var/run/vars/GIT_MODIFIED) -X \"pkg.version.GitCommitDate=$(cat /var/run/vars/GIT_DATE_LAST_COMMIT)\"" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-alpine:2.9.3
+FROM haproxytech/haproxy-debian:2.9.2
 
 ARG TARGETPLATFORM
 
@@ -60,8 +61,9 @@ ENV S6_GROUP=haproxy
 
 COPY /fs /
 
-RUN apk update && \
-    apk --no-cache add socat openssl util-linux htop tzdata curl libcap && \
+RUN apt update && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y socat openssl util-linux htop tzdata curl libcap2-bin xz-utils && \
+    rm -rf /var/lib/apt/lists/* && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi && \
     chgrp -R haproxy /usr/local/etc/haproxy /run /var && \
     chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
