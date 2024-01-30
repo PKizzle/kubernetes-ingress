@@ -81,8 +81,10 @@ func (c *HAProxyController) globalCfg() {
 		}
 	}
 	if newGlobal.TuneOptions == nil {
-		newGlobal.TuneOptions = &models.GlobalTuneOptions{
-			SslDefaultDhParam: 2048,
+		newGlobal.TuneOptions = &models.GlobalTuneOptions{}
+
+		if newGlobal.TuneSslDefaultDhParam == 0 {
+			newGlobal.TuneOptions.SslDefaultDhParam = 2048
 		}
 	}
 	env.SetGlobal(newGlobal, &newLg, c.haproxy.Env)
@@ -170,7 +172,6 @@ func (c *HAProxyController) handleDefaultService() {
 	if err != nil {
 		logger.Errorf("default service: %s", err)
 	}
-	instance.Reload("default service created")
 }
 
 func populateDefaultLocalBackendResources(k8sStore store.K8s, podNs string, defaultBackendPort int) error {
