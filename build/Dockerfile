@@ -61,7 +61,7 @@ ENV S6_GROUP=haproxy
 COPY /fs /
 
 RUN apk update && \
-    apk --no-cache add socat openssl util-linux htop tzdata curl libcap bash && \
+    apk --no-cache add socat util-linux htop tzdata curl libcap bash && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi && \
     chgrp -R haproxy /usr/local/etc/haproxy /run /var && \
     chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
