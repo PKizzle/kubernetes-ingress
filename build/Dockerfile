@@ -75,9 +75,8 @@ RUN apk update && \
     curl -sS -L -o /tmp/s6-overlay-binaries.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" && \
     tar -C / -Jxpf /tmp/s6-overlay-binaries.tar.xz && \
     rm -f /tmp/s6-overlay-scripts.tar.xz /tmp/s6-overlay-binaries.tar.xz && \
-    chown -R haproxy:haproxy /init /etc/s6-overlay && \
-    chmod u+x /etc/s6-overlay/scripts/* && \
-    chmod +s /init && \
+    chown -R "${S6_USER}:${S6_GROUP}" /init /etc/s6-overlay && \
+    chmod u+x /init /etc/s6-overlay/scripts/* && \
     rm -rf /var/lib/pebble
 
 COPY --from=builder /go/haproxy-ingress-controller .
