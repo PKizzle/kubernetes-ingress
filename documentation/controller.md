@@ -42,6 +42,9 @@ Image can be run with arguments:
 | [`--disable-service-external-name`](#--disable-service-external-name) | `false` |
 | [`--channel-size`](#--channel-size) | `600` |
 | [`--disable-config-snippets`](#--disable-config-snippets) :construction:(dev) |  |
+| [`--disable-quic`](#--disable-quic) :construction:(dev) | `false` |
+| [`--quic-announce-port`](#--quic-announce-port) :construction:(dev) |  |
+| [`--quic-bind-port`](#--quic-bind-port) :construction:(dev) |  |
 
 
 ### `--configmap`
@@ -738,6 +741,69 @@ Example:
 
 ```yaml
 --disable-config-snippets=backend,frontend
+```
+
+<p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>
+
+***
+
+### `--disable-quic`
+
+
+  > :construction: this is only available from next version, currently available in dev build
+
+  option to disable the quic binding used by default if a certificate is provided throug ssl-certificate annotation. Please be aware that the quic implementation is activated with the "limited-quic" global option. Please refer to the documentation for details.
+
+Possible values:
+
+
+Example:
+
+```yaml
+args:
+  - --disable-quic
+```
+
+<p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>
+
+***
+
+### `--quic-announce-port`
+
+
+  > :construction: this is only available from next version, currently available in dev build
+
+  adjust the port in the alt-svc header to redirect to the exposed port in case it differs from the quic binding port.
+
+Possible values:
+
+
+Example:
+
+```yaml
+args:
+  - --quic-announce-port=10443
+```
+
+<p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>
+
+***
+
+### `--quic-bind-port`
+
+
+  > :construction: this is only available from next version, currently available in dev build
+
+  sets the binding port for quic in HTTPS frontend.
+
+Possible values:
+
+
+Example:
+
+```yaml
+args:
+  - --quic-bind-port=4443        
 ```
 
 <p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>
