@@ -49,6 +49,7 @@ type HAProxyClient interface { //nolint:interfacebloat
 	FrontendDisableSSLOffload(frontendName string) (err error)
 	FrontendSSLOffloadEnabled(frontendName string) bool
 	FrontendBindsGet(frontend string) (models.Binds, error)
+	FrontendBindGet(frontend string, bindName string) (*models.Bind, error)
 	FrontendBindCreate(frontend string, bind models.Bind) error
 	FrontendBindEdit(frontend string, bind models.Bind) error
 	FrontendBindDelete(frontend string, bind string) error

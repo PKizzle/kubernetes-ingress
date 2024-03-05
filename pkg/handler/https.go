@@ -45,38 +45,23 @@ type HTTPS struct {
 }
 
 func (handler HTTPS) bindList(passhthrough bool) (binds []models.Bind) {
-	if handler.IPv4 {
+	addBind := func(address string, passhthrough bool, name string, v4v6 bool) {
 		binds = append(binds, models.Bind{
-			Address: func() (addr string) {
-				addr = handler.AddrIPv4
-				if passhthrough {
-					addr = "127.0.0.1"
-				}
-				return
-			}(),
-			Port: utils.PtrInt64(handler.Port),
+			Address: address,
+			Port:    utils.PtrInt64(handler.Port),
 			BindParams: models.BindParams{
-				Name:        "v4",
+				Name:        name,
 				AcceptProxy: passhthrough,
+				V4v6:        v4v6,
 			},
 		})
 	}
+
+	if handler.IPv4 {
+		addBind(handler.AddrIPv4, passhthrough, "v4", false)
+	}
 	if handler.IPv6 {
-		binds = append(binds, models.Bind{
-			Address: func() (addr string) {
-				addr = handler.AddrIPv6
-				if passhthrough {
-					addr = "::1"
-				}
-				return
-			}(),
-			Port: utils.PtrInt64(handler.Port),
-			BindParams: models.BindParams{
-				AcceptProxy: passhthrough,
-				Name:        "v6",
-				V4v6:        true,
-			},
-		})
+		addBind(handler.AddrIPv6, passhthrough, "v6", true)
 	}
 	return binds
 }

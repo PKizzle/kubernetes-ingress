@@ -138,6 +138,15 @@ func (c *clientNative) FrontendBindsGet(frontend string) (models.Binds, error) {
 	return binds, err
 }
 
+func (c *clientNative) FrontendBindGet(frontend string, bindName string) (*models.Bind, error) {
+	configuration, err := c.nativeAPI.Configuration()
+	if err != nil {
+		return nil, err
+	}
+	_, bind, err := configuration.GetBind(bindName, "frontend", frontend, c.activeTransaction)
+	return bind, err
+}
+
 func (c *clientNative) FrontendBindCreate(frontend string, bind models.Bind) error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {

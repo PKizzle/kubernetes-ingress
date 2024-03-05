@@ -62,28 +62,27 @@ func (c *HAProxyController) initHandlers() {
 		c.beforeUpdateHandlers = append(c.beforeUpdateHandlers, handler.Pprof{})
 	}
 
-	if !c.osArgs.DisableQuic {
-		c.updateHandlers = append(c.updateHandlers, &handler.Quic{
-			IPv4:     !c.osArgs.DisableIPV4,
-			AddrIPv4: c.osArgs.IPV4BindAddr,
-			IPv6:     !c.osArgs.DisableIPV6,
-			AddrIPv6: c.osArgs.IPV6BindAddr,
-			CertDir:  c.haproxy.Certs.FrontendDir,
-			QuicAnnouncePort: func() int64 {
-				if c.osArgs.QuicAnnouncePort != 0 {
-					return c.osArgs.QuicAnnouncePort
-				}
-				return c.osArgs.HTTPSBindPort
-			}(),
-			QuicBindPort: func() int64 {
-				if c.osArgs.QuicBindPort != 0 {
-					return c.osArgs.QuicBindPort
-				}
-				return c.osArgs.HTTPSBindPort
-			}(),
-			MaxAge: "0",
-		})
-	}
+	c.updateHandlers = append(c.updateHandlers, &handler.Quic{
+		Enabled:  !c.osArgs.DisableQuic,
+		IPv4:     !c.osArgs.DisableIPV4,
+		AddrIPv4: c.osArgs.IPV4BindAddr,
+		IPv6:     !c.osArgs.DisableIPV6,
+		AddrIPv6: c.osArgs.IPV6BindAddr,
+		CertDir:  c.haproxy.Certs.FrontendDir,
+		QuicAnnouncePort: func() int64 {
+			if c.osArgs.QuicAnnouncePort != 0 {
+				return c.osArgs.QuicAnnouncePort
+			}
+			return c.osArgs.HTTPSBindPort
+		}(),
+		QuicBindPort: func() int64 {
+			if c.osArgs.QuicBindPort != 0 {
+				return c.osArgs.QuicBindPort
+			}
+			return c.osArgs.HTTPSBindPort
+		}(),
+		MaxAge: "0",
+	})
 }
 
 func (c *HAProxyController) startupHandlers() error {
