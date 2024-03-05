@@ -53,7 +53,6 @@ type HAProxyController struct {
 	osArgs                   utils.OSArgs
 	auxCfgModTime            int64
 	ready                    bool
-	cfgFirstUpdateComplete   bool
 	updateStatusManager      status.UpdateStatusManager
 	beforeUpdateHandlers     []UpdateHandler
 }
@@ -82,10 +81,8 @@ func (c *HAProxyController) Start() {
 	c.initHandlers()
 	logger.Error(c.setupHAProxyRules())
 	logger.Error(os.Chdir(c.haproxy.Env.CfgDir))
-	if !c.cfgFirstUpdateComplete {
-		c.cfgFirstUpdateComplete = true
-		c.updateHAProxy()
-	}
+	logger.Panic(c.haproxy.Service("start"))
+
 	c.SyncData()
 }
 

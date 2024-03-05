@@ -25,10 +25,8 @@ func (d *s6Control) Service(action string) error {
 
 	switch action {
 	case "start":
-		cmd = exec.Command("s6-svc", "-u", "/run/service/haproxy")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		// no need to start it is up already (s6)
+		return nil
 	case "stop":
 		// no need to stop it (s6)
 		return nil
@@ -38,7 +36,7 @@ func (d *s6Control) Service(action string) error {
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
 	case "restart":
-		cmd = exec.Command("s6-svc", "-r", "/run/service/haproxy")
+		cmd = exec.Command("s6-svc", "-t", "/run/service/haproxy")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()

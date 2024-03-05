@@ -23,7 +23,7 @@ services:
 
         # (Optional) Control whether the service is started automatically when
         # Pebble starts. Default is "disabled".
-        startup: disabled
+        startup: enabled
 
         # (Optional) Username for starting service as a different user. It is
         # an error if the user doesn't exist.
