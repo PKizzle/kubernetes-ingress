@@ -42,7 +42,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         -ldflags "-X github.com/haproxytech/kubernetes-ingress/pkg/version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG)" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-alpine:2.9.4
+FROM haproxytech/haproxy-alpine-quic:3.0-dev4
 
 ARG TARGETPLATFORM
 
