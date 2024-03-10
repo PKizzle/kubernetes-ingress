@@ -32,7 +32,29 @@ type Quic struct {
 
 func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {
 	var binds []models.Bind
-	var bindCreated bool = false
+	var bindIPv4Exists, bindIPv6Exists bool
+
+	err = q.altSvcRule(h)
+	if err != nil {
+		return
+	}
+
+	existingBinds, err := h.FrontendBindsGet(h.FrontHTTPS)
+
+	if err != nil {
+		return
+	}
+
+	if q.IPv4 || q.IPv6 {
+		for _, existingBind := range existingBinds {
+			if existingBind.Name == QUIC4BIND {
+				bindIPv4Exists = true
+			}
+			if existingBind.Name == QUIC6BIND {
+				bindIPv6Exists = true
+			}
+		}
+	}
 
 	addBind := func(addr string, bindName string, v4v6 bool) {
 		binds = append(binds, models.Bind{
@@ -48,46 +70,24 @@ func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {
 		})
 	}
 
-	if q.IPv4 {
+	if q.IPv4 && !bindIPv4Exists {
 		addBind("quic4@"+q.AddrIPv4, QUIC4BIND, false)
 	}
-	if q.IPv6 {
+	if q.IPv6 && !bindIPv6Exists {
 		addBind("quic6@"+q.AddrIPv6, QUIC6BIND, true)
 	}
 
-	existingBinds, err := h.FrontendBindsGet(h.FrontHTTPS)
-
-	if err != nil {
-		return err
-	}
-
-	bindExists := func(bindName string) bool {
-		for _, existingBind := range existingBinds {
-			if existingBind.Name == bindName {
-				return true
-			}
-		}
-		return false
-	}
-
 	for _, bind := range binds {
-		if !bindExists(bind.Name) {
-			err = h.FrontendBindCreate(h.FrontHTTPS, bind)
-			if err != nil {
-				return err
-			}
-			bindCreated = true
-		}
-	}
-
-	if bindCreated {
-		err = q.altSvcRule(h)
+		err = h.FrontendBindCreate(h.FrontHTTPS, bind)
 		if err != nil {
 			return err
 		}
+	}
+
+	if len(binds) > 0 {
 		instance.Reload("QUIC enabled")
 	}
-	return nil
+	return
 }
 
 func (q *Quic) disableQUIC(h haproxy.HAProxy) (err error) {
@@ -96,11 +96,8 @@ func (q *Quic) disableQUIC(h haproxy.HAProxy) (err error) {
 		_, err = h.FrontendBindGet(h.FrontHTTPS, bindName)
 		if err == nil {
 			err = h.FrontendBindDelete(h.FrontHTTPS, bindName)
-			if err != nil {
-				return err
-			}
 		}
-		return nil
+		return
 	}
 	if q.IPv6 {
 		errors.Add(deleteBind(QUIC6BIND))
@@ -109,10 +106,10 @@ func (q *Quic) disableQUIC(h haproxy.HAProxy) (err error) {
 		errors.Add(deleteBind(QUIC4BIND))
 	}
 	err = errors.Result()
-	if err != nil {
+	if err == nil {
 		instance.Reload("QUIC disabled")
 	}
-	return err
+	return
 }
 
 func (q *Quic) altSvcRule(h haproxy.HAProxy) (err error) {
@@ -131,7 +128,7 @@ func (q *Quic) altSvcRule(h haproxy.HAProxy) (err error) {
 func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
 	if !q.Enabled {
 		logger.Debug("Cannot proceed with QUIC update, it is disabled")
-		return nil
+		return
 	}
 
 	// ssl-offload
@@ -140,7 +137,7 @@ func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations)
 		logger.Warning("QUIC requires SSL offload to be enabled")
 		logger.Error(q.disableQUIC(h))
 		instance.Reload("QUIC disabled")
-		return nil
+		return
 	}
 
 	maxAge := common.GetValue("quic-alt-svc-max-age", k.ConfigMaps.Main.Annotations)
@@ -153,7 +150,7 @@ func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations)
 	nsSslCertificateAnn, nameSslCertificateAnn, err := common.GetK8sPath("ssl-certificate", k.ConfigMaps.Main.Annotations)
 	if err != nil || (nameSslCertificateAnn == "") {
 		logger.Error(q.disableQUIC(h))
-		return err
+		return
 	} else {
 		namespaceSslCertificate := k.Namespaces[nsSslCertificateAnn]
 		var sslSecret *store.Secret
@@ -163,11 +160,11 @@ func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations)
 
 		if sslSecret == nil || sslSecret.Status == store.DELETED {
 			logger.Error(q.disableQUIC(h))
-			return nil
+			return
 		} else {
 			logger.Error(q.enableQUIC(h))
 		}
 	}
 
-	return nil
+	return
 }
