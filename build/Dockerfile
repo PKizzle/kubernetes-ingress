@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=${BUILDPLATFORM} golang:1.21-alpine AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.22-alpine AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
