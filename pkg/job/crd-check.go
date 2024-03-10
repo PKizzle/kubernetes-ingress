@@ -15,6 +15,7 @@ package job
 
 import (
 	"context"
+	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/haproxytech/kubernetes-ingress/crs/definition"
@@ -92,9 +93,16 @@ func CRDRefresh(log utils.Logger, osArgs utils.OSArgs) error {
 			}
 			if needUpgrade || vNew.GreaterThan(vK8s) {
 				// Upgrade the CRDl
-				_, err = clientset.ApiextensionsV1().CustomResourceDefinitions().Update(context.Background(), &crd, metav1.UpdateOptions{})
-				if err != nil {
-					return err
+				for i := 0; i < 3; i++ {
+					_, err = clientset.ApiextensionsV1().CustomResourceDefinitions().Update(context.Background(), &crd, metav1.UpdateOptions{})
+					if err != nil {
+						if apiError.IsConflict(err) || apiError.IsGone(err) {
+							time.Sleep(time.Second)
+							continue
+						}
+						return err
+					}
+					break
 				}
 				log.Infof("CRD %s updated", crdName)
 			}
