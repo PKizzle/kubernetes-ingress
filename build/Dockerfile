@@ -33,8 +33,8 @@ RUN --mount=type=bind,target=/go/src/github.com/haproxytech/kubernetes-ingress/g
 
 ENV CGO_ENABLED=0
 COPY . .
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=cache,sharing=locked,target=/go/pkg/mod \
+    --mount=type=cache,id=go-build-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/root/.cache/go-build \
     mkdir -p /var/run/vars && \
     ./crs/code-generator.sh && \
     git describe --abbrev=0 --tags > /var/run/vars/GIT_LAST_TAG || echo "dev" > /var/run/vars/GIT_LAST_TAG && \
