@@ -15,6 +15,10 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
+// BufferSize is the default value of HAproxy tune.bufsize. Not recommended to change it
+// Map payload or socket data cannot be bigger than tune.bufsize
+const BufferSize = 16000
+
 type HAProxyClient interface { //nolint:interfacebloat
 	APIStartTransaction() error
 	APICommitTransaction() error
@@ -66,8 +70,7 @@ type HAProxyClient interface { //nolint:interfacebloat
 	PeerEntryEdit(peerSection string, peer models.PeerEntry) error
 	RefreshBackends() (deleted []string, err error)
 	SetMapContent(mapFile string, payload []string) error
-	SetServerAddr(backendName string, serverName string, ip string, port int) error
-	SetServerState(backendName string, serverName string, state string) error
+	SetServerAddrAndState([]RuntimeServerData) error
 	ServerGet(serverName, backendNa string) (models.Server, error)
 	SetAuxCfgFile(auxCfgFile string)
 	SyncBackendSrvs(backend *store.RuntimeBackend, portUpdated bool) error

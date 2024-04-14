@@ -44,11 +44,19 @@ type HTTPS struct {
 	strictSNI bool
 }
 
+//nolint:golint, stylecheck
+const HTTPS_PORT_SSLPASSTHROUGH int64 = 8444
+
 func (handler HTTPS) bindList(passhthrough bool) (binds []models.Bind) {
 	addBind := func(address string, passhthrough bool, name string, v4v6 bool) {
 		binds = append(binds, models.Bind{
 			Address: address,
-			Port:    utils.PtrInt64(handler.Port),
+			Port: func() *int64 {
+				if passhthrough {
+					return utils.PtrInt64(HTTPS_PORT_SSLPASSTHROUGH)
+				}
+				return utils.PtrInt64(handler.Port)
+			}(),
 			BindParams: models.BindParams{
 				Name:        name,
 				AcceptProxy: passhthrough,
@@ -205,7 +213,7 @@ func (handler HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
 		h.BackendServerCreate(h.BackSSL, models.Server{
 			Name:         h.FrontHTTPS,
 			Address:      "127.0.0.1",
-			Port:         utils.PtrInt64(handler.Port),
+			Port:         utils.PtrInt64(HTTPS_PORT_SSLPASSTHROUGH),
 			ServerParams: models.ServerParams{SendProxyV2: "enabled"},
 		}),
 		h.BackendSwitchingRuleCreate(h.FrontSSL, models.BackendSwitchingRule{
