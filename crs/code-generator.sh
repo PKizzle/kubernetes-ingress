@@ -16,7 +16,7 @@ done
 # code-generator build native, versioned clients, informers and other helpers
 # via Kubernetes code generators from k8s.oi/code-generator
 
-CR_DIR=$(dirname "$0")
+CR_DIR=$( cd -- "$( dirname -- "$( readlink -f -- "${BASH_SOURCE[0]}"; )" )" &> /dev/null && pwd )
 OUTPUT_DIR="${CR_DIR}/.generated"
 HDR_FILE="${CR_DIR}/../assets/license-header.txt"
 CR_PKG="github.com/haproxytech/kubernetes-ingress/crs"
