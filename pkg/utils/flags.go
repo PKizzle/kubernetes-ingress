@@ -14,13 +14,16 @@ type NamespaceValue struct {
 
 // UnmarshalFlag Unmarshal flag
 func (n *NamespaceValue) UnmarshalFlag(value string) error {
-	parts := strings.Split(value, "/")
+	if value != "" {
+		parts := strings.Split(value, "/")
 
-	if len(parts) != 2 {
-		return errors.New("expected two strings separated by a /")
+		if len(parts) != 2 {
+			return errors.New("expected two strings separated by a /")
+		}
+		n.Namespace = parts[0]
+		n.Name = parts[1]
 	}
-	n.Namespace = parts[0]
-	n.Name = parts[1]
+
 	return nil
 }
 
