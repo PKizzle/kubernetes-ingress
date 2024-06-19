@@ -65,7 +65,7 @@ type K8s interface {
 // and a method to process the update of a CR
 type CR interface {
 	GetKind() string
-	GetInformer(chan k8ssync.SyncDataEvent, crinformers.SharedInformerFactory) cache.SharedIndexInformer
+	GetInformer(chan k8ssync.SyncDataEvent, crinformers.SharedInformerFactory) cache.SharedIndexInformer //nolint:inamedparam
 }
 
 // k8s is structure with all data required to synchronize with k8s
@@ -135,6 +135,7 @@ func New(osArgs utils.OSArgs, whitelist map[string]struct{}, publishSvc *utils.N
 	k.registerCoreCR(NewGlobalCR(), CRSGroupVersionV1)
 	k.registerCoreCR(NewDefaultsCR(), CRSGroupVersionV1)
 	k.registerCoreCR(NewBackendCR(), CRSGroupVersionV1)
+	k.registerCoreCR(NewTCPCR(), CRSGroupVersionV1)
 	return k
 }
 

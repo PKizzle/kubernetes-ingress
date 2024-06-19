@@ -1,12 +1,10 @@
 linters-settings:
   govet:
-    check-shadowing: true
+    shadow: true
   gocyclo:
     min-complexity: 42
   cyclop:
     max-complexity: 42
-  maligned:
-    suggest-new: true
   dupl:
     threshold: 200
   revive:
@@ -18,9 +16,9 @@ linters:
   enable-all: true
   disable:
     - ireturn
+    - tagliatelle
     - dupl
     - exhaustive
-    - exhaustivestruct
     - funlen
     - gci
     - gochecknoglobals
@@ -28,7 +26,6 @@ linters:
     - goconst
     - gocyclo
     - godot
-    - goerr113
     - gomnd
     - lll
     - nestif
@@ -39,19 +36,14 @@ linters:
     - paralleltest
     - testpackage
     - varnamelen
-    - nosnakecase
     - exhaustruct
     - nonamedreturns
     - forcetypeassert
-    - golint #deprecated
-    - varcheck #deprecated
-    - ifshort #deprecated
-    - structcheck #deprecated
-    - maligned #deprecated
-    - scopelint #deprecated
-    - interfacer #deprecated
-    - deadcode #deprecated
+    - execinquery #deprecated
     - depguard
+    - mnd
+    - inamedparam
+    - err113 # maybe tmp disable
 issues:
   exclude:
     - "tag is not aligned, should be:" # this is harder to read

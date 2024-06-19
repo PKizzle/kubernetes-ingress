@@ -1,10 +1,11 @@
 # Custom Resources
 
 - In order to use custom resources, you will need to apply/update resource [definitions](../crs/definition/)
-- Custom Resources are used by Ingress Controller to implement HAProxy concepts like (backend, frontend, http rules, etc) which are all available under the `core.haproxy.org` API.
+- Custom Resources are used by Ingress Controller to implement HAProxy concepts like (backend, frontend, http rules, etc) which are all available under the `ingress.v1.haproxy.org` API.
 - Current implementation relies on the [client-native](https://github.com/haproxytech/client-native) library and its [models](https://github.com/haproxytech/client-native/tree/master/models) to [configure HAProxy](https://cbonte.github.io/haproxy-dconv/2.4/configuration.html#4.1).
 - Custom resources are meant to **replace annotations** when possible. So they will have **precedance** when used.
   *Example:* if the backend resource is used no backend annotation will be processed which means a backend cannot be configured by mixing both the backend resource and backend annotations.
+- For the Custom Resource to define TCP service, refer to [Custom resource definition for TCP service](custom-resource-tcp.md)
 
 ## HAProxy concepts
 - Only HAProxy directives available in the resource [definitions](../crs/definition/) are supported, contributions and github requests to support new directives are welcome.
@@ -17,7 +18,7 @@ The Global resource is used to configure the HAProxy global section by referenci
 
 1. Define a global resource
 ```yaml
-apiVersion: "core.haproxy.org/v1alpha1"
+apiVersion: "ingress.v1.haproxy.org/v1"
 kind: Global
 metadata:
   name: myglobal
@@ -58,19 +59,6 @@ The `ingress.v1.haproxy.org/Global` CRD `version v1`  is using client-native v5 
 
 An annototation in the CRD is available to specify the version of client-native used: `haproxy.org/client-native`
 
-Ingress Controller is deployed with `haproxy 2.8`.
-Note that the following fields of the CRD are `haproxy 2.9` keywords and cannot be used with this version of Ingress Controller, even if defined the `Globals` CRD:
-- `runtime_api.quic-socket`
-- `tune_options.events_max_events_at_once`
-- `tune_options.max_checks_per_thread`
-- `tune_options.rcvbuf_backend`
-- `tune_options.rcvbuf_frontend`
-- `tune_options.sndbuf_backend`
-- `tune_options.sndbuf_frontend`
-- `tune_options.zlib_memlevel`
-- `tune_options.zlib_windowsize`
-
-
 ### Defaults
 The Defaults resource is used to configure the HAProxy defaults section by referencing the resouce via the `cr-defaults` annotation in the Ingress Controller ConfigMap.
 
@@ -78,7 +66,7 @@ The Defaults resource is used to configure the HAProxy defaults section by refer
 
 1. Define a defaults resource
 ```yaml
-apiVersion: "core.haproxy.org/v1alpha1"
+apiVersion: "ingress.v1.haproxy.org/v1"
 kind: Defaults
 metadata:
   name: mydefaults
@@ -126,7 +114,7 @@ The Backend resource is used to configure the HAProxy backend section by referen
 
 1. Define a backend resource
 ```yaml
-apiVersion: "core.haproxy.org/v1alpha1"
+apiVersion: "ingress.v1.haproxy.org/v1"
 kind: Backend
 metadata:
   name: mybackend

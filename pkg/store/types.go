@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/haproxytech/client-native/v5/models"
+	v1 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v1"
 )
 
 // ServicePort describes port of a service
@@ -104,7 +105,9 @@ type CustomResources struct {
 	Global     map[string]*models.Global
 	Defaults   map[string]*models.Defaults
 	LogTargets map[string]models.LogTargets
-	Backends   map[string]*models.Backend
+	Backends   map[string]*v1.BackendSpec
+	TCPsPerCR  map[string]*TCPs // key is the TCP CR name
+	AllTCPs    TCPResourceList
 }
 
 type IngressClass struct {
@@ -285,7 +288,3 @@ type ReferenceGrantTo struct {
 	Group string
 	Kind  string
 }
-
-const (
-	TCPProtocolType string = "TCP"
-)

@@ -15,6 +15,7 @@
 package env
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,7 +63,7 @@ func (env *Env) Init(osArgs utils.OSArgs) (err error) {
 	}
 	for _, dir := range []string{env.CfgDir, env.RuntimeDir, env.StateDir} {
 		if dir == "" {
-			return fmt.Errorf("failed to init controller config: missing config directories")
+			return errors.New("failed to init controller config: missing config directories")
 		}
 	}
 	// Binary and main files
@@ -85,6 +86,7 @@ func (env *Env) Init(osArgs utils.OSArgs) (err error) {
 	env.Certs.MainDir = filepath.Join(env.CfgDir, "certs")
 	env.Certs.FrontendDir = filepath.Join(env.Certs.MainDir, "frontend")
 	env.Certs.BackendDir = filepath.Join(env.Certs.MainDir, "backend")
+	env.Certs.TCPCRDir = filepath.Join(env.Certs.MainDir, "tcp")
 	env.Certs.CaDir = filepath.Join(env.Certs.MainDir, "ca")
 	env.MapsDir = filepath.Join(env.CfgDir, "maps")
 	env.PatternDir = filepath.Join(env.CfgDir, "patterns")
@@ -95,6 +97,7 @@ func (env *Env) Init(osArgs utils.OSArgs) (err error) {
 		env.Certs.FrontendDir,
 		env.Certs.BackendDir,
 		env.Certs.CaDir,
+		env.Certs.TCPCRDir,
 		env.MapsDir,
 		env.ErrFileDir,
 		env.StateDir,

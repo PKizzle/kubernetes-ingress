@@ -5,9 +5,9 @@ go 1.22.0
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/fasthttp/router v1.5.1
+	github.com/go-openapi/swag v0.23.0
 	github.com/go-test/deep v1.1.0
 	github.com/google/renameio v1.0.1
-	github.com/haproxytech/client-native/v2 v2.5.6
 	github.com/haproxytech/client-native/v3 v3.1.2-0.20230607075433-231591da68ed
 	github.com/haproxytech/client-native/v5 v5.1.7
 	github.com/haproxytech/config-parser/v5 v5.1.4
@@ -44,7 +44,6 @@ require (
 	github.com/go-openapi/loads v0.22.0 // indirect
 	github.com/go-openapi/spec v0.21.0 // indirect
 	github.com/go-openapi/strfmt v0.23.0 // indirect
-	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-openapi/validate v0.24.0 // indirect
 	github.com/gofrs/flock v0.8.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect

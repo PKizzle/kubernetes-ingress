@@ -16,6 +16,7 @@ type certs struct {
 	frontend map[string]*cert
 	backend  map[string]*cert
 	ca       map[string]*cert
+	TCPCR    map[string]*cert
 }
 
 type Certificates interface {
@@ -45,6 +46,7 @@ type Env struct {
 	FrontendDir string
 	BackendDir  string
 	CaDir       string
+	TCPCRDir    string
 }
 
 var env Env
@@ -59,6 +61,7 @@ const (
 	FT_DEFAULT_CERT
 	BD_CERT
 	CA_CERT
+	TCP_CERT
 )
 
 type SecretCtx struct {
@@ -70,18 +73,22 @@ type SecretCtx struct {
 func New(envParam Env) (Certificates, error) { //nolint:ireturn
 	env = envParam
 	if env.FrontendDir == "" {
-		return nil, fmt.Errorf("empty name for Frontend Cert Directory")
+		return nil, errors.New("empty name for Frontend Cert Directory")
 	}
 	if env.BackendDir == "" {
-		return nil, fmt.Errorf("empty name for Backend Cert Directory")
+		return nil, errors.New("empty name for Backend Cert Directory")
 	}
 	if env.CaDir == "" {
-		return nil, fmt.Errorf("empty name for CA Cert Directory")
+		return nil, errors.New("empty name for CA Cert Directory")
+	}
+	if env.TCPCRDir == "" {
+		return nil, errors.New("empty name for TCP Cert Directory")
 	}
 	return &certs{
 		frontend: make(map[string]*cert),
 		backend:  make(map[string]*cert),
 		ca:       make(map[string]*cert),
+		TCPCR:    make(map[string]*cert),
 	}, nil
 }
 
@@ -114,6 +121,10 @@ func (c *certs) AddSecret(secret *store.Secret, secretType SecretType) (certPath
 		certPath = path.Join(env.CaDir, certName)
 		certs = c.ca
 		privateKeyNull = true
+	case TCP_CERT:
+		certName = fmt.Sprintf("%s_%s", secret.Namespace, secret.Name)
+		certPath = path.Join(env.TCPCRDir, certName)
+		certs = c.TCPCR
 	default:
 		return "", errors.New("unspecified context")
 	}
@@ -151,6 +162,10 @@ func (c *certs) CleanCerts() {
 		c.ca[i].inUse = false
 		c.ca[i].updated = false
 	}
+	for i := range c.TCPCR {
+		c.TCPCR[i].inUse = false
+		c.TCPCR[i].updated = false
+	}
 }
 
 func (c *certs) FrontCertsInUse() bool {
@@ -166,10 +181,11 @@ func (c *certs) RefreshCerts() {
 	refreshCerts(c.frontend, env.FrontendDir)
 	refreshCerts(c.backend, env.BackendDir)
 	refreshCerts(c.ca, env.CaDir)
+	refreshCerts(c.TCPCR, env.TCPCRDir)
 }
 
 func (c *certs) CertsUpdated() (reload bool) {
-	for _, certs := range []map[string]*cert{c.frontend, c.backend, c.ca} {
+	for _, certs := range []map[string]*cert{c.frontend, c.backend, c.ca, c.TCPCR} {
 		for _, crt := range certs {
 			if crt.updated {
 				logger.Debugf("Secret '%s' was updated", crt.name)
@@ -211,7 +227,7 @@ func writeSecret(secret *store.Secret, c *cert, privateKeyNull bool) (err error)
 		if !crtOk {
 			return fmt.Errorf("certificate missing in %s/%s", secret.Namespace, secret.Name)
 		}
-		c.path = fmt.Sprintf("%s.pem", c.path)
+		c.path += ".pem"
 		return writeCert(c.path, []byte(""), crtValue)
 	}
 	for _, k := range []string{"tls", "rsa", "ecdsa", "dsa"} {
@@ -219,7 +235,7 @@ func writeSecret(secret *store.Secret, c *cert, privateKeyNull bool) (err error)
 		crtValue, crtOk = secret.Data[k+".crt"]
 		if keyOk && crtOk {
 			pemOk = true
-			certPath = fmt.Sprintf("%s.pem", c.path)
+			certPath = c.path + ".pem"
 			if k != "tls" {
 				// HAProxy "cert bundle"
 				certPath = fmt.Sprintf("%s.%s", certPath, k)

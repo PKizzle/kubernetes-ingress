@@ -10,6 +10,7 @@ Image can be run with arguments:
 | Argument | Default |
 | - |:-:|
 | [`--configmap`](#--configmap) | `default/haproxy-configmap` |
+| [`--job-check-crd`](#--job-check-crd) | `false` |
 | [`--configmap-tcp-services`](#--configmap-tcp-services) |  |
 | [`--configmap-errorfiles`](#--configmap-errorfiles) |  |
 | [`--configmap-patternfiles`](#--configmap-patternfiles) |  |
@@ -59,6 +60,24 @@ Example:
 
 ```yaml
 --configmap=default/my-configmap
+```
+
+<p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>
+
+***
+
+### `--job-check-crd`
+
+  Special mode for controller that checks if the CRDs are installed and are on latest version. Note that this will not run ingress controller, it just checks if CRDs are OK and exits
+
+Possible values:
+
+- this is boolean flag
+
+Example:
+
+```yaml
+--job-check-crd
 ```
 
 <p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>
@@ -549,7 +568,7 @@ Example:
 
 ### `--sync-period`
 
-  The interval at which the controller syncs its configuration with updated Kubernetes objects.
+  The interval at which the controller syncs its configuration with updated Kubernetes objects. In the case where the ingress controller is reloading too frequently, a higher value may be required. Note, if using helm charts you must also adjust the `startupProbe`'s `initialDelaySeconds` value. Its value must be higher than the `--sync-period` value.
 
 Possible values:
 
@@ -791,7 +810,7 @@ Example:
 
 ```yaml
 args:
-  - --quic-bind-port=4443        
+  - --quic-bind-port=4443
 ```
 
 <p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>

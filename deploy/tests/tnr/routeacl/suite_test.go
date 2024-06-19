@@ -108,6 +108,7 @@ func (suite *UseBackendSuite) UseBackendFixture() (eventChan chan k8ssync.SyncDa
 	s := store.NewK8sStore(osArgs)
 
 	haproxyEnv := env.Env{
+		CfgDir: suite.test.TempDir,
 		Proxies: env.Proxies{
 			FrontHTTP:  "http",
 			FrontHTTPS: "https",

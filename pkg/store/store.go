@@ -18,6 +18,8 @@ import (
 	"fmt"
 
 	"github.com/haproxytech/client-native/v5/models"
+	v1 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v1"
+	rc "github.com/haproxytech/kubernetes-ingress/pkg/reference-counter"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
@@ -36,6 +38,7 @@ type K8s struct {
 	HaProxyPods                  map[string]struct{}
 	UpdateAllIngresses           bool
 	BackendsWithNoConfigSnippets map[string]struct{}
+	FrontendRC                   *rc.ResourceCounter
 }
 
 type NamespacesWatch struct {
@@ -78,6 +81,7 @@ func NewK8sStore(args utils.OSArgs) K8s {
 		GatewayClasses:               map[string]*GatewayClass{},
 		BackendsWithNoConfigSnippets: map[string]struct{}{},
 		HaProxyPods:                  map[string]struct{}{},
+		FrontendRC:                   rc.NewResourceCounter(),
 	}
 	for _, namespace := range args.NamespaceWhitelist {
 		store.NamespacesAccess.Whitelist[namespace] = struct{}{}
@@ -128,6 +132,14 @@ func (k *K8s) Clean() {
 				data.Status = EMPTY
 			}
 		}
+		for _, cr := range namespace.CRs.TCPsPerCR {
+			switch cr.Status {
+			case DELETED:
+				delete(namespace.CRs.TCPsPerCR, cr.Name)
+			default:
+				cr.Status = EMPTY
+			}
+		}
 	}
 	for _, igClass := range k.IngressClasses {
 		igClass.Status = EMPTY
@@ -162,7 +174,8 @@ func (k K8s) GetNamespace(name string) *Namespace {
 			Global:     make(map[string]*models.Global),
 			Defaults:   make(map[string]*models.Defaults),
 			LogTargets: make(map[string]models.LogTargets),
-			Backends:   make(map[string]*models.Backend),
+			Backends:   make(map[string]*v1.BackendSpec),
+			TCPsPerCR:  make(map[string]*TCPs),
 		},
 		Gateways:        make(map[string]*Gateway),
 		TCPRoutes:       make(map[string]*TCPRoute),

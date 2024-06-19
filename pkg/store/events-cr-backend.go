@@ -24,6 +24,6 @@ func (k *K8s) EventBackendCR(namespace, name string, data *v1.Backend) bool {
 		delete(ns.CRs.Backends, name)
 		return true
 	}
-	ns.CRs.Backends[name] = data.Spec.Config
+	ns.CRs.Backends[name] = &data.Spec
 	return true
 }
