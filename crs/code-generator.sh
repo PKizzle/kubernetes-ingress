@@ -18,7 +18,7 @@ done
 
 CR_DIR=$( cd -- "$( dirname -- "$( readlink -f -- "${BASH_SOURCE[0]}"; )" )" &> /dev/null && pwd )
 OUTPUT_DIR="${CR_DIR}/.generated"
-HDR_FILE="${CR_DIR}/../assets/license-header.txt"
+HDR_FILE="$( readlink -f -- "${CR_DIR}/../assets/license-header.txt"; )"
 CR_PKG="github.com/haproxytech/kubernetes-ingress/crs"
 API_PKGS=$(find ${CR_DIR}/api -mindepth 2 -type d -printf "$CR_PKG/api/%P\n"| sort | tr '\n' ',')
 API_PKGS=${API_PKGS::-1} # remove trailing ","
