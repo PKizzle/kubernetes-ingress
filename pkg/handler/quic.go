@@ -21,13 +21,13 @@ const (
 type Quic struct {
 	AddrIPv4         string
 	AddrIPv6         string
+	CertDir          string
+	MaxAge           string
+	QuicAnnouncePort int64
+	QuicBindPort     int64
 	IPv4             bool
 	IPv6             bool
-	Enabled		     bool
-	CertDir          string
-	QuicAnnouncePort int64
-	MaxAge           string
-	QuicBindPort     int64
+	Enabled          bool
 }
 
 func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {

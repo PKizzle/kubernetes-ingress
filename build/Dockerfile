@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=${BUILDPLATFORM} golang:1.22-alpine AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.23-alpine AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -42,7 +42,7 @@ RUN --mount=type=cache,sharing=locked,target=/go/pkg/mod \
         -ldflags "-X github.com/haproxytech/kubernetes-ingress/pkg/version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG)" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-alpine-quic:3.0
+FROM haproxytech/haproxy-alpine-quic:3.0.5
 
 ARG TARGETPLATFORM
 

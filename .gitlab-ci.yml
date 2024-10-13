@@ -8,10 +8,10 @@ stages:
   - e2e_k8s_29
   - e2e_k8s_30
 variables:
-  KIND: v0.23.0
+  KIND: v0.24.0
   DOCKER_HOST: tcp://docker:2375
   DOCKER_DRIVER: overlay2
-  GO_VERSION: "1.22"
+  GO_VERSION: "1.23"
   DOCKER_VERSION: "26.0"
 diff:
   stage: diff
@@ -86,14 +86,14 @@ golangci_lint:
   tags:
     - go
   script:
-    - make lint
-lint-commit-msg:
+    - make lint-seq
+commit-policy:
   stage: lint
   needs: []
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   image:
-    name: $CI_REGISTRY_GO/commit-check:3.0.0
+    name: $CI_REGISTRY_GO/commit-check:5.0.2
     entrypoint: [""]
   tags:
     - go
@@ -106,7 +106,7 @@ unit-tests:
     - if: $CI_PIPELINE_SOURCE == 'push'
   stage: unit-tests
   image:
-    name: $CI_REGISTRY_GO/haproxy-alpine:2.7-go$GO_VERSION
+    name: $CI_REGISTRY_GO/haproxy-alpine:3.0-go$GO_VERSION
     entrypoint: [""]
   tags:
     - go
@@ -206,27 +206,27 @@ docker-build:
   rules:
    - if: $CI_PIPELINE_SOURCE == "schedule"
   allow_failure: true
-e2e_k8s_28:
-  stage: e2e_k8s_28
-  needs: ["docker-build"]
-  variables:
-    K8S_VERSION: v1.28.6
-    KUBEADM_VER: v1beta3
-    KUBECTL: v1.28.0
-  extends: .kind_deployment_schedules
 e2e_k8s_29:
   stage: e2e_k8s_29
   needs: ["docker-build"]
   variables:
-    K8S_VERSION: v1.29.1
+    K8S_VERSION: v1.29.8
     KUBEADM_VER: v1beta3
-    KUBECTL: v1.29.0
+    KUBECTL: v1.29.8
   extends: .kind_deployment_schedules
 e2e_k8s_30:
   stage: e2e_k8s_30
   needs: ["docker-build"]
   variables:
-    K8S_VERSION: v1.30.0
+    K8S_VERSION: v1.30.4
     KUBEADM_VER: v1beta3
-    KUBECTL: v1.30.0
+    KUBECTL: v1.30.4
+  extends: .kind_deployment_schedules
+e2e_k8s_31:
+  stage: e2e_k8s_30
+  needs: ["docker-build"]
+  variables:
+    K8S_VERSION: v1.31.0
+    KUBEADM_VER: v1beta3
+    KUBECTL: v1.31.0
   extends: .kind_deployment

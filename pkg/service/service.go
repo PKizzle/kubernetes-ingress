@@ -38,17 +38,17 @@ var logger = utils.GetLogger()
 const cookieKey = "ohph7OoGhong"
 
 type Service struct {
-	path        *store.IngressPath
-	resource    *store.Service
-	backend     *models.Backend
-	certs       certs.Certificates
+	certs    certs.Certificates
+	path     *store.IngressPath
+	resource *store.Service
+	backend  *models.Backend
+	// ingressName      string
+	// ingressNamespace string
+	ingress     *store.Ingress
 	annotations []map[string]string
 	modeTCP     bool
 	newBackend  bool
 	standalone  bool
-	// ingressName      string
-	// ingressNamespace string
-	ingress *store.Ingress
 }
 
 // New returns a Service instance to handle the k8s IngressPath resource given in params.
@@ -145,10 +145,11 @@ func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a 
 	var backend *models.Backend
 	var newBackend *v1.BackendSpec
 	newBackend, err = s.getBackendModel(storeK8s, a)
-	s.backend = newBackend.Config
 	if err != nil {
+		s.backend = nil
 		return
 	}
+	s.backend = newBackend.Config
 	// Get/Create Backend
 	backend, err = client.BackendGet(newBackend.Config.Name)
 	if err == nil {

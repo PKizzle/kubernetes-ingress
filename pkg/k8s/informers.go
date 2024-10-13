@@ -16,7 +16,9 @@ import (
 	"github.com/haproxytech/client-native/v5/models"
 
 	v1 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v1"
+	k8smeta "github.com/haproxytech/kubernetes-ingress/pkg/k8s/meta"
 	k8ssync "github.com/haproxytech/kubernetes-ingress/pkg/k8s/sync"
+	k8stransform "github.com/haproxytech/kubernetes-ingress/pkg/k8s/transform"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -63,8 +65,8 @@ func (k k8s) getNamespaceInfomer(eventChan chan k8ssync.SyncDataEvent, factory i
 					Labels:          utils.CopyMap(data.Labels),
 					Status:          status,
 				}
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.NAMESPACE, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.NAMESPACE, Namespace: item.Name, Data: item}
+				logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			},
 			DeleteFunc: func(obj interface{}) {
 				data, ok := obj.(*corev1.Namespace)
@@ -92,8 +94,8 @@ func (k k8s) getNamespaceInfomer(eventChan chan k8ssync.SyncDataEvent, factory i
 					Labels:          utils.CopyMap(data.Labels),
 					Status:          status,
 				}
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.NAMESPACE, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.NAMESPACE, Namespace: item.Name, Data: item}
+				logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				_, ok := oldObj.(*corev1.Namespace)
@@ -113,11 +115,15 @@ func (k k8s) getNamespaceInfomer(eventChan chan k8ssync.SyncDataEvent, factory i
 					Status: status,
 					Labels: utils.CopyMap(data2.Labels),
 				}
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.NAMESPACE, item2.Status, item2.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.NAMESPACE, Namespace: item2.Name, Data: item2}
+				logIncomingK8sEvent(logger, item2, data2.UID, data2.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item2, item2, data2.UID, data2.ResourceVersion)
 			},
 		},
 	)
+	logger.Error(err)
+
+	// Use TransformFunc to modify/filter objects before passing them to handlers
+	err = informer.SetTransform(k8stransform.TransformNamespace)
 	logger.Error(err)
 	return informer
 }
@@ -161,14 +167,19 @@ func (k k8s) getServiceInformer(eventChan chan k8ssync.SyncDataEvent, factory in
 					Port:     int64(sp.Port),
 				})
 			}
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.SERVICE, item.Status, item.Name)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.SERVICE, Namespace: item.Namespace, Data: item}
+			logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
+			eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			if k.publishSvc != nil && k.publishSvc.Namespace == item.Namespace && k.publishSvc.Name == item.Name {
 				// item copy because of ADDED handler in events.go which must modify the STATUS based solely on addresses
 				itemCopy := *item
 				itemCopy.Addresses = getServiceAddresses(data)
 				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.PUBLISH_SERVICE, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.PUBLISH_SERVICE, Namespace: item.Namespace, Data: &itemCopy}
+				eventChan <- k8ssync.SyncDataEvent{
+					SyncType:  k8ssync.PUBLISH_SERVICE,
+					Namespace: item.Namespace,
+					Name:      item.Name,
+					Data:      &itemCopy,
+				}
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -190,12 +201,17 @@ func (k k8s) getServiceInformer(eventChan chan k8ssync.SyncDataEvent, factory in
 			if data.Spec.Type == corev1.ServiceTypeExternalName {
 				item.DNS = data.Spec.ExternalName
 			}
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.SERVICE, item.Status, item.Name)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.SERVICE, Namespace: item.Namespace, Data: item}
+			logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
+			eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			if k.publishSvc != nil && k.publishSvc.Namespace == item.Namespace && k.publishSvc.Name == item.Name {
 				item.Addresses = getServiceAddresses(data)
 				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.PUBLISH_SERVICE, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.PUBLISH_SERVICE, Namespace: data.Namespace, Data: item}
+				eventChan <- k8ssync.SyncDataEvent{
+					SyncType:  k8ssync.PUBLISH_SERVICE,
+					Namespace: data.Namespace,
+					Name:      data.Name,
+					Data:      item,
+				}
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -238,16 +254,25 @@ func (k k8s) getServiceInformer(eventChan chan k8ssync.SyncDataEvent, factory in
 				})
 			}
 
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.SERVICE, item2.Status, item2.Name)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.SERVICE, Namespace: item2.Namespace, Data: item2}
+			logIncomingK8sEvent(logger, item2, data2.UID, data2.ResourceVersion)
+			eventChan <- ToSyncDataEvent(item2, item2, data2.UID, data2.ResourceVersion)
 
 			if k.publishSvc != nil && k.publishSvc.Namespace == item2.Namespace && k.publishSvc.Name == item2.Name {
 				item2.Addresses = getServiceAddresses(data2)
 				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.PUBLISH_SERVICE, item2.Status, item2.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.PUBLISH_SERVICE, Namespace: item2.Namespace, Data: item2}
+				eventChan <- k8ssync.SyncDataEvent{
+					SyncType:  k8ssync.PUBLISH_SERVICE,
+					Namespace: item2.Namespace,
+					Name:      item2.Name,
+					Data:      item2,
+				}
 			}
 		},
 	})
+	logger.Error(err)
+
+	// Use TransformFunc to modify/filter objects before passing them to handlers
+	err = informer.SetTransform(k8stransform.TransformService)
 	logger.Error(err)
 	return informer
 }
@@ -277,8 +302,8 @@ func (k k8s) getSecretInformer(eventChan chan k8ssync.SyncDataEvent, factory inf
 					Data:      data.Data,
 					Status:    status,
 				}
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.SECRET, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.SECRET, Namespace: item.Namespace, Data: item}
+				logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			},
 			DeleteFunc: func(obj interface{}) {
 				data, ok := obj.(*corev1.Secret)
@@ -293,8 +318,8 @@ func (k k8s) getSecretInformer(eventChan chan k8ssync.SyncDataEvent, factory inf
 					Data:      data.Data,
 					Status:    status,
 				}
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.SECRET, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.SECRET, Namespace: item.Namespace, Data: item}
+				logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				_, ok := oldObj.(*corev1.Secret)
@@ -316,11 +341,15 @@ func (k k8s) getSecretInformer(eventChan chan k8ssync.SyncDataEvent, factory inf
 					Status:    status,
 				}
 
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.SECRET, item2.Status, item2.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.SECRET, Namespace: item2.Namespace, Data: item2}
+				logIncomingK8sEvent(logger, item2, data2.UID, data2.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item2, item2, data2.UID, data2.ResourceVersion)
 			},
 		},
 	)
+	logger.Error(err)
+
+	// Use TransformFunc to modify/filter objects before passing them to handlers
+	err = informer.SetTransform(k8stransform.TransformSecret)
 	logger.Error(err)
 	return informer
 }
@@ -350,8 +379,8 @@ func (k k8s) getConfigMapInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 					Annotations: store.CopyAnnotations(data.Data),
 					Status:      status,
 				}
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.CONFIGMAP, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.CONFIGMAP, Namespace: item.Namespace, Data: item}
+				logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			},
 			DeleteFunc: func(obj interface{}) {
 				data, ok := obj.(*corev1.ConfigMap)
@@ -366,8 +395,8 @@ func (k k8s) getConfigMapInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 					Annotations: store.CopyAnnotations(data.Data),
 					Status:      status,
 				}
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.CONFIGMAP, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.CONFIGMAP, Namespace: item.Namespace, Data: item}
+				logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				_, ok := oldObj.(*corev1.ConfigMap)
@@ -388,11 +417,15 @@ func (k k8s) getConfigMapInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 					Status:      status,
 				}
 
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.CONFIGMAP, item2.Status, item2.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.CONFIGMAP, Namespace: item2.Namespace, Data: item2}
+				logIncomingK8sEvent(logger, item2, data2.UID, data2.ResourceVersion)
+				eventChan <- ToSyncDataEvent(item2, item2, data2.UID, data2.ResourceVersion)
 			},
 		},
 	)
+	logger.Error(err)
+
+	// Use TransformFunc to modify/filter objects before passing them to handlers
+	err = informer.SetTransform(k8stransform.TransformSecret)
 	logger.Error(err)
 	return informer
 }
@@ -461,16 +494,20 @@ func (k k8s) getEndpointsInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 			if errors.Is(err, ErrIgnored) {
 				return
 			}
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s %s", k8ssync.ENDPOINTS, item.Status, item.Service, item.SliceName)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.ENDPOINTS, Namespace: item.Namespace, Data: item}
+			uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
+			logger.Error(err)
+			logIncomingK8sEvent(logger, item, uid, resourceVersion)
+			eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 		},
 		DeleteFunc: func(obj interface{}) {
 			item, err := k.convertToEndpoints(obj, store.DELETED)
 			if errors.Is(err, ErrIgnored) {
 				return
 			}
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s %s", k8ssync.ENDPOINTS, item.Status, item.Service, item.SliceName)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.ENDPOINTS, Namespace: item.Namespace, Data: item}
+			uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
+			logger.Error(err)
+			logIncomingK8sEvent(logger, item, uid, resourceVersion)
+			eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			_, err := k.convertToEndpoints(oldObj, store.EMPTY)
@@ -479,10 +516,16 @@ func (k k8s) getEndpointsInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 			}
 			item2, _ := k.convertToEndpoints(newObj, store.MODIFIED)
 			// fix modified state for ones that are deleted,new,same
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s %s", k8ssync.ENDPOINTS, item2.Status, item2.Service, item2.SliceName)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.ENDPOINTS, Namespace: item2.Namespace, Data: item2}
+			uid, resourceVersion, err := store.GetUIDResourceVersion(newObj)
+			logger.Error(err)
+			logIncomingK8sEvent(logger, item2, uid, resourceVersion)
+			eventChan <- ToSyncDataEvent(item2, item2, uid, resourceVersion)
 		},
 	})
+	logger.Error(err)
+
+	// Use TransformFunc to modify/filter objects before passing them to handlers
+	err = informer.SetTransform(k8stransform.TransformEndpoints)
 	logger.Error(err)
 	return informer
 }
@@ -490,37 +533,42 @@ func (k k8s) getEndpointsInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 func (k *k8s) getPodInformer(namespace, podPrefix string, resyncPeriod time.Duration, eventChan chan k8ssync.SyncDataEvent) cache.Controller { //nolint:ireturn
 	var prefix string
 	watchlist := cache.NewListWatchFromClient(k.builtInClient.CoreV1().RESTClient(), "pods", namespace, fields.Nothing())
-	_, eController := cache.NewInformer(
-		watchlist,
-		&corev1.Pod{},
-		resyncPeriod,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				meta := obj.(*corev1.Pod).ObjectMeta
-				prefix, _ = utils.GetPodPrefix(meta.Name)
-				if prefix != podPrefix {
-					return
-				}
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.POD, Namespace: meta.Namespace, Data: store.PodEvent{Status: store.ADDED, Name: meta.Name}}
+	_, eController := cache.NewInformerWithOptions(
+		cache.InformerOptions{
+			ListerWatcher: watchlist,
+			ObjectType:    &corev1.Pod{},
+			ResyncPeriod:  resyncPeriod,
+			Handler: cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					meta := obj.(*corev1.Pod).ObjectMeta
+					prefix, _ = utils.GetPodPrefix(meta.Name)
+					if prefix != podPrefix {
+						return
+					}
+					item := store.PodEvent{Status: store.ADDED, Name: meta.Name, Namespace: meta.Namespace}
+					eventChan <- ToSyncDataEvent(item, item, meta.UID, meta.ResourceVersion)
+				},
+				DeleteFunc: func(obj interface{}) {
+					meta := obj.(*corev1.Pod).ObjectMeta //nolint:forcetypeassert
+					prefix, _ = utils.GetPodPrefix(meta.Name)
+					if prefix != podPrefix {
+						return
+					}
+					item := store.PodEvent{Status: store.DELETED, Name: meta.Name, Namespace: meta.Namespace}
+					eventChan <- ToSyncDataEvent(item, item, meta.UID, meta.ResourceVersion)
+				},
+				UpdateFunc: func(oldObj, newObj interface{}) {
+					meta := newObj.(*corev1.Pod).ObjectMeta //nolint:forcetypeassert
+					prefix, _ = utils.GetPodPrefix(meta.Name)
+					if prefix != podPrefix {
+						return
+					}
+					item := store.PodEvent{Status: store.MODIFIED, Name: meta.Name, Namespace: meta.Namespace}
+					eventChan <- ToSyncDataEvent(item, item, meta.UID, meta.ResourceVersion)
+				},
 			},
-			DeleteFunc: func(obj interface{}) {
-				meta := obj.(*corev1.Pod).ObjectMeta //nolint:forcetypeassert
-				prefix, _ = utils.GetPodPrefix(meta.Name)
-				if prefix != podPrefix {
-					return
-				}
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.POD, Namespace: meta.Namespace, Data: store.PodEvent{Status: store.DELETED, Name: meta.Name}}
-			},
-			UpdateFunc: func(oldObj, newObj interface{}) {
-				meta := newObj.(*corev1.Pod).ObjectMeta //nolint:forcetypeassert
-				prefix, _ = utils.GetPodPrefix(meta.Name)
-				if prefix != podPrefix {
-					return
-				}
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.POD, Namespace: meta.Namespace, Data: store.PodEvent{Status: store.MODIFIED, Name: meta.Name}}
-			},
-		},
-	)
+		})
+
 	return eController
 }
 
@@ -537,8 +585,10 @@ func (k k8s) addIngressClassHandlers(eventChan chan k8ssync.SyncDataEvent, infor
 					logger.Errorf("%s: Invalid data from k8s api, %s", k8ssync.INGRESS_CLASS, obj)
 					return
 				}
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.INGRESS_CLASS, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.INGRESS_CLASS, Data: item}
+				uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
+				logger.Error(err)
+				logIncomingK8sEvent(logger, item, uid, resourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 			DeleteFunc: func(obj interface{}) {
 				item, err := store.ConvertToIngressClass(obj)
@@ -547,8 +597,10 @@ func (k k8s) addIngressClassHandlers(eventChan chan k8ssync.SyncDataEvent, infor
 					return
 				}
 				item.Status = store.DELETED
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.INGRESS_CLASS, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.INGRESS_CLASS, Data: item}
+				uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
+				logger.Error(err)
+				logIncomingK8sEvent(logger, item, uid, resourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				item, err := store.ConvertToIngressClass(newObj)
@@ -557,12 +609,17 @@ func (k k8s) addIngressClassHandlers(eventChan chan k8ssync.SyncDataEvent, infor
 					return
 				}
 				item.Status = store.MODIFIED
-
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.INGRESS_CLASS, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.INGRESS_CLASS, Data: item}
+				uid, resourceVersion, err := store.GetUIDResourceVersion(newObj)
+				logger.Error(err)
+				logIncomingK8sEvent(logger, item, uid, resourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 		},
 	)
+	logger.Error(err)
+
+	// Use TransformFunc to modify/filter objects before passing them to handlers
+	err = informer.SetTransform(k8stransform.TransformIngressClass)
 	logger.Error(err)
 }
 
@@ -580,8 +637,10 @@ func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer c
 					return
 				}
 				item.Status = store.ADDED
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.INGRESS, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.INGRESS, Namespace: item.Namespace, Data: item}
+				uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
+				logger.Error(err)
+				logIncomingK8sEvent(logger, item, uid, resourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 			DeleteFunc: func(obj interface{}) {
 				item, err := store.ConvertToIngress(obj)
@@ -590,8 +649,10 @@ func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer c
 					return
 				}
 				item.Status = store.DELETED
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.INGRESS, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.INGRESS, Namespace: item.Namespace, Data: item}
+				uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
+				logger.Error(err)
+				logIncomingK8sEvent(logger, item, uid, resourceVersion)
+				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				item, err := store.ConvertToIngress(newObj)
@@ -600,11 +661,21 @@ func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer c
 					return
 				}
 				item.Status = store.MODIFIED
-				logger.Tracef("[RUNTIME] [K8s] %s %s: %s", k8ssync.INGRESS, item.Status, item.Name)
-				eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.INGRESS, Namespace: item.Namespace, Data: item}
+				uid, resourceVersion, err := store.GetUIDResourceVersion(newObj)
+				logger.Error(err)
+				if k8smeta.GetMetaStore().ProcessedResourceVersion.IsProcessed(item, uid, resourceVersion) {
+					logIncomingK8sEvent(logger, item, uid, resourceVersion, "already processed")
+					return
+				}
+				logIncomingK8sEvent(logger, item, uid, resourceVersion, "new resource version")
+				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 		},
 	)
+	logger.Error(err)
+
+	// Use TransformFunc to modify/filter objects before passing them to handlers
+	err = informer.SetTransform(k8stransform.TransformIngress)
 	logger.Error(err)
 }
 
@@ -619,16 +690,20 @@ func (k k8s) addEndpointSliceHandlers(eventChan chan k8ssync.SyncDataEvent, info
 			if errors.Is(err, ErrIgnored) {
 				return
 			}
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s %s", k8ssync.ENDPOINTS, item.Status, item.Service, item.SliceName)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.ENDPOINTS, Namespace: item.Namespace, Data: item}
+			uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
+			logger.Error(err)
+			logIncomingK8sEvent(logger, item, uid, resourceVersion)
+			eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 		},
 		DeleteFunc: func(obj interface{}) {
 			item, err := k.convertToEndpoints(obj, store.DELETED)
 			if errors.Is(err, ErrIgnored) {
 				return
 			}
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s %s", k8ssync.ENDPOINTS, item.Status, item.Service, item.SliceName)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.ENDPOINTS, Namespace: item.Namespace, Data: item}
+			uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
+			logger.Error(err)
+			logIncomingK8sEvent(logger, item, uid, resourceVersion)
+			eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			_, err := k.convertToEndpoints(oldObj, store.EMPTY)
@@ -636,11 +711,17 @@ func (k k8s) addEndpointSliceHandlers(eventChan chan k8ssync.SyncDataEvent, info
 				return
 			}
 			item2, _ := k.convertToEndpoints(newObj, store.MODIFIED)
+			uid, resourceVersion, err := store.GetUIDResourceVersion(newObj)
+			logger.Error(err)
 			// fix modified state for ones that are deleted,new,same
-			logger.Tracef("[RUNTIME] [K8s] %s %s: %s %s", k8ssync.ENDPOINTS, item2.Status, item2.Service, item2.SliceName)
-			eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.ENDPOINTS, Namespace: item2.Namespace, Data: item2}
+			logIncomingK8sEvent(logger, item2, uid, resourceVersion)
+			eventChan <- ToSyncDataEvent(item2, item2, uid, resourceVersion)
 		},
 	})
+	logger.Error(err)
+
+	// Use TransformFunc to modify/filter objects before passing them to handlers
+	err = informer.SetTransform(k8stransform.TransformEndpoints)
 	logger.Error(err)
 }
 

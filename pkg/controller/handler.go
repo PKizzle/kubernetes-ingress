@@ -52,7 +52,7 @@ func (c *HAProxyController) initHandlers() {
 		&handler.PatternFiles{},
 		annotations.ConfigSnippetHandler{},
 		c.updateStatusManager,
-		handler.TCPCustomResource{},
+		handler.NewTCPCustomResource(c.osArgs.IngressClass, c.osArgs.EmptyIngressClass),
 	}
 
 	defer func() { c.updateHandlers = append(c.updateHandlers, handler.Refresh{}) }()
@@ -95,14 +95,16 @@ func (c *HAProxyController) startupHandlers() error {
 	handlers := []UpdateHandler{
 		handler.GlobalCfg{},
 		handler.HTTPBind{
-			HTTP:      !c.osArgs.DisableHTTP,
-			HTTPS:     !c.osArgs.DisableHTTPS,
-			IPv4:      !c.osArgs.DisableIPV4,
-			IPv6:      !c.osArgs.DisableIPV6,
-			HTTPPort:  c.osArgs.HTTPBindPort,
-			HTTPSPort: c.osArgs.HTTPSBindPort,
-			IPv4Addr:  c.osArgs.IPV4BindAddr,
-			IPv6Addr:  c.osArgs.IPV6BindAddr,
+			HTTP:            !c.osArgs.DisableHTTP,
+			HTTPS:           !c.osArgs.DisableHTTPS,
+			IPv4:            !c.osArgs.DisableIPV4,
+			IPv6:            !c.osArgs.DisableIPV6,
+			HTTPPort:        c.osArgs.HTTPBindPort,
+			HTTPSPort:       c.osArgs.HTTPSBindPort,
+			IPv4Addr:        c.osArgs.IPV4BindAddr,
+			IPv6Addr:        c.osArgs.IPV6BindAddr,
+			HTTPBindThread:  c.osArgs.HTTPBindThread,
+			HTTPSBindThread: c.osArgs.HTTPSBindThread,
 		},
 	}
 

@@ -23,14 +23,13 @@ builds:
       - -X "main.GitRepo={{.GitURL}}"
       - -X "main.GitTag={{.Tag}}"
       - -X "main.GitCommit={{.ShortCommit}}"
-      - -X "main.GitDirty= "
       - -X "main.BuildTime={{.Date}}"
     goos:
       - linux
       - darwin
       - freebsd
     goarch:
-      - 386
+      - "386"
       - amd64
       - arm
       - arm64

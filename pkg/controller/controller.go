@@ -41,24 +41,24 @@ var logger = utils.GetLogger()
 
 // HAProxyController is ingress controller
 type HAProxyController struct {
+	store                    store.K8s
+	prometheusMetricsManager metrics.PrometheusMetricsManager
 	gatewayManager           gateway.GatewayManager
 	annotations              annotations.Annotations
+	updateStatusManager      status.UpdateStatusManager
 	eventChan                chan k8ssync.SyncDataEvent
 	updatePublishServiceFunc func(ingresses []*ingress.Ingress, publishServiceAddresses []string)
 	chShutdown               chan struct{}
 	podNamespace             string
 	podPrefix                string
-	haproxy                  haproxy.HAProxy
+	PodIP                    string
+	Hostname                 string
 	updateHandlers           []UpdateHandler
-	store                    store.K8s
+	beforeUpdateHandlers     []UpdateHandler
+	haproxy                  haproxy.HAProxy
 	osArgs                   utils.OSArgs
 	auxCfgModTime            int64
 	ready                    bool
-	updateStatusManager      status.UpdateStatusManager
-	beforeUpdateHandlers     []UpdateHandler
-	prometheusMetricsManager metrics.PrometheusMetricsManager
-	PodIP                    string
-	Hostname                 string
 }
 
 // Wrapping a Native-Client transaction and commit it.
@@ -225,7 +225,8 @@ func (c *HAProxyController) setToReady() {
 		return c.haproxy.FrontendBindCreate("healthz",
 			models.Bind{
 				BindParams: models.BindParams{
-					Name: "v4",
+					Name:   "v4",
+					Thread: c.osArgs.HealthzBindThread,
 				},
 				Address: fmt.Sprintf("0.0.0.0:%d", healthzPort),
 			})
@@ -235,8 +236,9 @@ func (c *HAProxyController) setToReady() {
 			return c.haproxy.FrontendBindCreate("healthz",
 				models.Bind{
 					BindParams: models.BindParams{
-						Name: "v6",
-						V4v6: true,
+						Name:   "v6",
+						V4v6:   true,
+						Thread: c.osArgs.HealthzBindThread,
 					},
 					Address: fmt.Sprintf(":::%d", healthzPort),
 				})
@@ -247,7 +249,8 @@ func (c *HAProxyController) setToReady() {
 		return c.haproxy.FrontendBindCreate("stats",
 			models.Bind{
 				BindParams: models.BindParams{
-					Name: "stats",
+					Name:   "stats",
+					Thread: c.osArgs.StatsBindThread,
 				},
 				Address: fmt.Sprintf("*:%d", c.osArgs.StatsBindPort),
 			},

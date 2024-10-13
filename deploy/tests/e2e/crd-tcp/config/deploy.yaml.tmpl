@@ -10,7 +10,6 @@ spec:
       app: http-echo
   template:
     metadata:
-      creationTimestamp: null
       labels:
         app: http-echo
     spec:
@@ -32,8 +31,10 @@ kind: Service
 apiVersion: v1
 metadata:
   name: http-echo
+  {{- if ne .BackendCrName "" }}
   annotations:
-    cr-backend: {{ .BackendCrNamespace }}/mybackend
+    cr-backend: {{ .BackendCrNamespace }}/{{ .BackendCrName }}
+  {{- end }}
 spec:
   ipFamilyPolicy: RequireDualStack
   ports:
@@ -45,47 +46,10 @@ spec:
       protocol: TCP
       port: 443
       targetPort: https
-    - name: https2
+    - name: http2
       protocol: TCP
-      port: 444
-      targetPort: https
-    - name: https3
-      protocol: TCP
-      port: 445
-      targetPort: https
+      port: 81
+      targetPort: http
   selector:
     app: http-echo
 ---
----
-kind: Ingress
-apiVersion: networking.k8s.io/v1
-metadata:
-  name: http-echo
-  annotations:
-    ingress.class: haproxy
-spec:
-  rules:
-    - host: {{ .Host }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: http-echo
-                port:
-                  name: http
-          - path: /foo_s
-            pathType: Prefix
-            backend:
-              service:
-                name: http-echo
-                port:
-                  name: https
-          - path: /foo_s2
-            pathType: Prefix
-            backend:
-              service:
-                name: http-echo
-                port:
-                  name: https2

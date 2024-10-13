@@ -5,6 +5,7 @@ kubernetes-ingress
 dist/
 .code-generator/
 bin/golangci-lint
+bin/check-commit
 .local/*
 *.DS_Store
 vendor
