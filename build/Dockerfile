@@ -24,7 +24,7 @@ ARG GOARCH=$TARGETARCH
 WORKDIR /go/src/github.com/haproxytech/kubernetes-ingress
 
 RUN apk update && \
-    apk --no-cache add git
+    apk --no-cache add git bash
 
 RUN --mount=type=bind,target=/go/src/github.com/haproxytech/kubernetes-ingress/go.mod,src=./go.mod \
     --mount=type=bind,target=/go/src/github.com/haproxytech/kubernetes-ingress/go.sum,src=./go.sum \
