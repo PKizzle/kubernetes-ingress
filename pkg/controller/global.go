@@ -29,6 +29,7 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/ingress"
 	"github.com/haproxytech/kubernetes-ingress/pkg/service"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
+	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
 func (c *HAProxyController) handleGlobalConfig() {
@@ -89,13 +90,15 @@ func (c *HAProxyController) globalCfg() {
 	env.SetGlobal(newGlobal, &newLg, c.haproxy.Env)
 	diff := newGlobal.Diff(*global)
 	if len(diff) != 0 {
-		logger.Error(c.haproxy.GlobalPushConfiguration(*newGlobal))
+		err := c.haproxy.GlobalPushConfiguration(*newGlobal)
+		logger.Error(err)
 		instance.Reload("Global config updated: %+v", diff)
 	}
 	diff = newLg.Diff(lg)
 	if len(diff) != 0 {
-		logger.Error(c.haproxy.GlobalPushLogTargets(newLg))
-		instance.Reload("Global log targets updated: %+v", diff)
+		err := c.haproxy.GlobalPushLogTargets(newLg)
+		logger.Error(err)
+		instance.Reload("Global log targets updated: %+v", utils.JSONDiff(diff))
 	}
 	c.globalCfgSnipp()
 }
@@ -165,7 +168,7 @@ func (c *HAProxyController) handleDefaultService() {
 		SvcName:          name,
 		IsDefaultBackend: true,
 	}
-	if svc, err = service.New(c.store, ingressPath, nil, false, nil, c.store.ConfigMaps.Main.Annotations); err == nil {
+	if svc, err = service.New(c.store, ingressPath, c.haproxy.Certificates, false, nil, c.store.ConfigMaps.Main.Annotations); err == nil {
 		err = svc.SetDefaultBackend(c.store, c.haproxy, []string{c.haproxy.FrontHTTP, c.haproxy.FrontHTTPS}, c.annotations)
 	}
 	if err != nil {
@@ -235,7 +238,7 @@ func (c *HAProxyController) handleDefaultLocalService() {
 		IsDefaultBackend: true,
 	}
 
-	if svc, err = service.New(c.store, ingressPath, nil, false, nil, c.store.ConfigMaps.Main.Annotations); err == nil {
+	if svc, err = service.New(c.store, ingressPath, c.haproxy.Certificates, false, nil, c.store.ConfigMaps.Main.Annotations); err == nil {
 		err = svc.SetDefaultBackend(c.store, c.haproxy, []string{c.haproxy.FrontHTTP, c.haproxy.FrontHTTPS}, c.annotations)
 	}
 	if err != nil {

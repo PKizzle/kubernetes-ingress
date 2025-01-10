@@ -23,6 +23,7 @@ import (
 
 	"github.com/haproxytech/client-native/v5/models"
 	"github.com/haproxytech/kubernetes-ingress/pkg/annotations"
+	"github.com/haproxytech/kubernetes-ingress/pkg/fs"
 	gateway "github.com/haproxytech/kubernetes-ingress/pkg/gateways"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
@@ -174,6 +175,12 @@ func (c *HAProxyController) updateHAProxy() {
 		logger.Error(handler.Update(c.store, c.haproxy, c.annotations))
 	}
 
+	fs.Writer.WaitUntilWritesDone()
+
+	if !c.ready {
+		c.setToReady()
+	}
+
 	err = c.haproxy.APICommitTransaction()
 	if err != nil {
 		logger.Error("unable to Sync HAProxy configuration !!")
@@ -192,17 +199,17 @@ func (c *HAProxyController) updateHAProxy() {
 		return
 	}
 
-	if !c.ready {
-		c.setToReady()
-	}
-
 	if instance.NeedReload() {
+		fs.RunDelayedFuncs()
 		if err = c.haproxy.Service("reload"); err != nil {
 			logger.Error(err)
 		} else {
 			logger.Info("HAProxy reloaded")
 		}
 		c.prometheusMetricsManager.UpdateReloadMetrics(err)
+	} else if c.osArgs.DisableDelayedWritingOnlyIfReload {
+		// If the osArgs flag is set, then write the files to disk even if there is no reload of haproxy
+		fs.RunDelayedFuncs()
 	}
 
 	c.clean(false)
@@ -213,41 +220,35 @@ func (c *HAProxyController) updateHAProxy() {
 // setToRready exposes readiness endpoint
 func (c *HAProxyController) setToReady() {
 	healthzPort := c.osArgs.HealthzBindPort
-	logger.Panic(c.clientAPIClosure(func() error {
-		return c.haproxy.FrontendBindCreate("healthz",
+	logger.Panic(c.haproxy.FrontendBindCreate("healthz",
+		models.Bind{
+			BindParams: models.BindParams{
+				Name:   "v4",
+				Thread: c.osArgs.HealthzBindThread,
+			},
+			Address: fmt.Sprintf("0.0.0.0:%d", healthzPort),
+		}))
+	if !c.osArgs.DisableIPV6 {
+		logger.Panic(c.haproxy.FrontendBindCreate("healthz",
 			models.Bind{
 				BindParams: models.BindParams{
-					Name:   "v4",
+					Name:   "v6",
+					V4v6:   true,
 					Thread: c.osArgs.HealthzBindThread,
 				},
-				Address: fmt.Sprintf("0.0.0.0:%d", healthzPort),
-			})
-	}))
-	if !c.osArgs.DisableIPV6 {
-		logger.Panic(c.clientAPIClosure(func() error {
-			return c.haproxy.FrontendBindCreate("healthz",
-				models.Bind{
-					BindParams: models.BindParams{
-						Name:   "v6",
-						V4v6:   true,
-						Thread: c.osArgs.HealthzBindThread,
-					},
-					Address: fmt.Sprintf(":::%d", healthzPort),
-				})
-		}))
+				Address: fmt.Sprintf(":::%d", healthzPort),
+			}))
 	}
 
-	logger.Panic(c.clientAPIClosure(func() error {
-		return c.haproxy.FrontendBindCreate("stats",
-			models.Bind{
-				BindParams: models.BindParams{
-					Name:   "stats",
-					Thread: c.osArgs.StatsBindThread,
-				},
-				Address: fmt.Sprintf("*:%d", c.osArgs.StatsBindPort),
+	logger.Panic(c.haproxy.FrontendBindCreate("stats",
+		models.Bind{
+			BindParams: models.BindParams{
+				Name:   "stats",
+				Thread: c.osArgs.StatsBindThread,
 			},
-		)
-	}))
+			Address: fmt.Sprintf("*:%d", c.osArgs.StatsBindPort),
+		},
+	))
 
 	logger.Debugf("healthz frontend exposed for readiness probe")
 	cm := c.store.ConfigMaps.Main

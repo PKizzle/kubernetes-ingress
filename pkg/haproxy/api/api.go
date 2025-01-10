@@ -42,6 +42,7 @@ type HAProxyClient interface { //nolint:interfacebloat
 	BackendServerDeleteAll(backendName string) (deleteServers bool)
 	BackendServerCreate(backendName string, data models.Server) error
 	BackendServerEdit(backendName string, data models.Server) error
+	BackendServerCreateOrEdit(backendName string, data models.Server) error
 	BackendServerDelete(backendName string, serverName string) error
 	BackendServersGet(backendName string) (models.Servers, error)
 	BackendSwitchingRulesGet(frontendName string) (models.BackendSwitchingRules, error)
@@ -103,6 +104,11 @@ type HAProxyClient interface { //nolint:interfacebloat
 	UserListDeleteAll() error
 	UserListExistsByGroup(group string) (bool, error)
 	UserListCreateByGroup(group string, userPasswordMap map[string][]byte) error
+	CertEntryCreate(filename string) error
+	CertEntrySet(filename string, payload []byte) error
+	CertEntryCommit(filename string) error
+	CertEntryAbort(filename string) error
+	CrtListEntryAdd(crtList string, entry runtime.CrtListEntry) error
 }
 
 type clientNative struct {

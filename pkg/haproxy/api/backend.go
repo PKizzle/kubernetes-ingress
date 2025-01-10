@@ -3,8 +3,8 @@ package api
 import (
 	"errors"
 
+	"github.com/haproxytech/client-native/v5/config-parser/types"
 	"github.com/haproxytech/client-native/v5/models"
-	"github.com/haproxytech/config-parser/v5/types"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
@@ -167,6 +167,15 @@ func (c *clientNative) BackendServerEdit(backendName string, data models.Server)
 	}
 	c.activeTransactionHasChanges = true
 	return configuration.EditServer(data.Name, "backend", backendName, &data, c.activeTransaction, 0)
+}
+
+func (c *clientNative) BackendServerCreateOrEdit(backendName string, data models.Server) error {
+	configuration, err := c.nativeAPI.Configuration()
+	if err != nil {
+		return err
+	}
+	c.activeTransactionHasChanges = true
+	return configuration.CreateOrEditServer("backend", backendName, &data, c.activeTransaction, 0)
 }
 
 func (c *clientNative) BackendServerDelete(backendName string, serverName string) error {
