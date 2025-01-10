@@ -50,7 +50,12 @@ const HTTPS_PORT_SSLPASSTHROUGH int64 = 8444
 func (handler HTTPS) bindList(passhthrough bool) (binds []models.Bind) {
 	addBind := func(address string, passhthrough bool, name string, v4v6 bool) {
 		binds = append(binds, models.Bind{
-			Address: address,
+			Address: func() (addr string) {
+				if passhthrough {
+					return "::"
+				}
+				return address
+			}(),
 			Port: func() *int64 {
 				if passhthrough {
 					return utils.PtrInt64(HTTPS_PORT_SSLPASSTHROUGH)
