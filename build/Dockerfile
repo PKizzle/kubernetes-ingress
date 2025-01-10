@@ -46,7 +46,7 @@ FROM haproxytech/haproxy-alpine-quic:3.1-dev10
 
 ARG TARGETPLATFORM
 
-ARG S6_OVERLAY_VERSION=3.1.6.2
+ARG S6_OVERLAY_VERSION=3.2.0.2
 ENV S6_OVERLAY_VERSION $S6_OVERLAY_VERSION
 ENV S6_READ_ONLY_ROOT=1
 ENV S6_USER=haproxy
@@ -57,7 +57,7 @@ COPY /fs /
 RUN apk update && \
     apk --no-cache add socat util-linux htop tzdata curl libcap bash && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi && \
-    chgrp -R haproxy /usr/local/etc/haproxy /run /var && \
+    chown -R haproxy:haproxy /usr/local/etc/haproxy /run /var && \
     chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
     setcap 'cap_net_bind_service=+ep' /usr/local/sbin/haproxy && \
     case "${TARGETPLATFORM}" in \
@@ -81,6 +81,8 @@ RUN apk update && \
     rm -rf /var/lib/pebble
 
 COPY --from=builder /go/haproxy-ingress-controller .
+
+USER haproxy
 
 VOLUME [ "/run" ]
 
