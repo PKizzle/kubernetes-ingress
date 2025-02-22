@@ -13,9 +13,9 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
 
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/haproxytech/client-native/v6/models"
 
-	v1 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v1"
+	v3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	k8smeta "github.com/haproxytech/kubernetes-ingress/pkg/k8s/meta"
 	k8ssync "github.com/haproxytech/kubernetes-ingress/pkg/k8s/sync"
 	k8stransform "github.com/haproxytech/kubernetes-ingress/pkg/k8s/transform"
@@ -54,10 +54,9 @@ func (k k8s) getNamespaceInfomer(eventChan chan k8ssync.SyncDataEvent, factory i
 					Secret:         make(map[string]*store.Secret),
 					HAProxyRuntime: make(map[string]map[string]*store.RuntimeBackend),
 					CRs: &store.CustomResources{
-						Global:     make(map[string]*models.Global),
-						Defaults:   make(map[string]*models.Defaults),
-						LogTargets: make(map[string]models.LogTargets),
-						Backends:   make(map[string]*v1.BackendSpec),
+						Global:   make(map[string]*models.Global),
+						Defaults: make(map[string]*models.Defaults),
+						Backends: make(map[string]*v3.BackendSpec),
 					},
 					Gateways:        make(map[string]*store.Gateway),
 					TCPRoutes:       make(map[string]*store.TCPRoute),
@@ -83,10 +82,9 @@ func (k k8s) getNamespaceInfomer(eventChan chan k8ssync.SyncDataEvent, factory i
 					Secret:         make(map[string]*store.Secret),
 					HAProxyRuntime: make(map[string]map[string]*store.RuntimeBackend),
 					CRs: &store.CustomResources{
-						Global:     make(map[string]*models.Global),
-						Defaults:   make(map[string]*models.Defaults),
-						LogTargets: make(map[string]models.LogTargets),
-						Backends:   make(map[string]*v1.BackendSpec),
+						Global:   make(map[string]*models.Global),
+						Defaults: make(map[string]*models.Defaults),
+						Backends: make(map[string]*v3.BackendSpec),
 					},
 					Gateways:        make(map[string]*store.Gateway),
 					TCPRoutes:       make(map[string]*store.TCPRoute),
@@ -430,7 +428,7 @@ func (k k8s) getConfigMapInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 	return informer
 }
 
-func (k k8s) getIngressInformers(eventChan chan k8ssync.SyncDataEvent, factory informers.SharedInformerFactory) (ii, ici cache.SharedIndexInformer) { //nolint:ireturn
+func (k k8s) getIngressInformers(eventChan chan k8ssync.SyncDataEvent, factory informers.SharedInformerFactory, osArgs utils.OSArgs) (ii, ici cache.SharedIndexInformer) { //nolint:ireturn
 	apiGroup := "networking.k8s.io/v1"
 
 	resources, err := k.builtInClient.ServerResourcesForGroupVersion(apiGroup)
@@ -447,7 +445,7 @@ func (k k8s) getIngressInformers(eventChan chan k8ssync.SyncDataEvent, factory i
 		}
 	}
 	if ii != nil {
-		k.addIngressHandlers(eventChan, ii)
+		k.addIngressHandlers(eventChan, ii, osArgs)
 		if ici != nil {
 			k.addIngressClassHandlers(eventChan, ici)
 		}
@@ -623,7 +621,7 @@ func (k k8s) addIngressClassHandlers(eventChan chan k8ssync.SyncDataEvent, infor
 	logger.Error(err)
 }
 
-func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer cache.SharedIndexInformer) {
+func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer cache.SharedIndexInformer, osArgs utils.OSArgs) {
 	errW := informer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
 		go logger.Debug("Ingress informer error: %s", err)
 	})
@@ -640,6 +638,11 @@ func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer c
 				uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
 				logger.Error(err)
 				logIncomingK8sEvent(logger, item, uid, resourceVersion)
+				if item.Class != "" && item.Class != osArgs.IngressClass {
+					// Due to ingressclass.kubernetes.io/is-default-class annotation in ingressclass
+					// we need to keep also empty ingressclasses in ingress
+					return
+				}
 				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -652,6 +655,11 @@ func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer c
 				uid, resourceVersion, err := store.GetUIDResourceVersion(obj)
 				logger.Error(err)
 				logIncomingK8sEvent(logger, item, uid, resourceVersion)
+				if item.Class != "" && item.Class != osArgs.IngressClass {
+					// Due to ingressclass.kubernetes.io/is-default-class annotation in ingressclass
+					// we need to keep also empty ingressclasses in ingress
+					return
+				}
 				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {

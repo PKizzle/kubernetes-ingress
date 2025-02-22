@@ -20,12 +20,13 @@ import (
 	"strings"
 	"testing"
 
-	parser "github.com/haproxytech/client-native/v5/config-parser"
-	"github.com/haproxytech/client-native/v5/config-parser/options"
-	filtertypes "github.com/haproxytech/client-native/v5/config-parser/parsers/filters"
-	tcp_actions "github.com/haproxytech/client-native/v5/config-parser/parsers/tcp/actions"
-	tcptypes "github.com/haproxytech/client-native/v5/config-parser/parsers/tcp/types"
-	"github.com/haproxytech/client-native/v5/config-parser/types"
+	parser "github.com/haproxytech/client-native/v6/config-parser"
+	"github.com/haproxytech/client-native/v6/config-parser/options"
+	actions "github.com/haproxytech/client-native/v6/config-parser/parsers/actions"
+	filtertypes "github.com/haproxytech/client-native/v6/config-parser/parsers/filters"
+	tcptypes "github.com/haproxytech/client-native/v6/config-parser/parsers/tcp/types"
+	"github.com/haproxytech/client-native/v6/config-parser/types"
+	"github.com/haproxytech/kubernetes-ingress/deploy/tests/e2e"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -59,7 +60,8 @@ func TestTCPSuiteFull(t *testing.T) {
 
 func (suite *TCPSuiteFull) Test_CRD_TCP_Full() {
 	suite.Run("TCP CR Full", func() {
-		suite.Require().NoError(suite.test.Apply("config/tcp-cr-full.yaml", suite.test.GetNS(), nil))
+		crdPath := e2e.GetCRDFixturePath() + "/tcp-cr-full.yaml"
+		suite.Require().NoError(suite.test.Apply(crdPath, suite.test.GetNS(), nil))
 
 		// SNI backend0.example.com should go to http-echo-0
 		suite.checkClientRequest("backend0.example.com", "http-echo-0")
@@ -101,7 +103,7 @@ func (suite *TCPSuiteFull) Test_CRD_TCP_Full() {
 				Timeout: "5000",
 			},
 			&tcptypes.Content{
-				Action: &tcp_actions.Accept{
+				Action: &actions.Accept{
 					Cond:     "if",
 					CondTest: "{ req_ssl_hello_type 1 }",
 				},

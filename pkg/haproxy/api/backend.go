@@ -6,7 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/haproxytech/client-native/v5/models"
+	parser "github.com/haproxytech/client-native/v6/config-parser"
+	"github.com/haproxytech/client-native/v6/models"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
@@ -16,7 +17,7 @@ func (c *clientNative) BackendsGet() models.Backends {
 	backends := models.Backends(make([]*models.Backend, len(c.backends)))
 	i := 0
 	for _, backend := range c.backends {
-		backends[i] = &backend.BackendBase
+		backends[i] = &backend.Backend
 		i++
 	}
 	return backends
@@ -25,7 +26,7 @@ func (c *clientNative) BackendsGet() models.Backends {
 func (c *clientNative) BackendGet(backendName string) (*models.Backend, error) {
 	oldBackend, ok := c.backends[backendName]
 	if ok {
-		return &oldBackend.BackendBase, nil
+		return &oldBackend.Backend, nil
 	}
 	return nil, fmt.Errorf("backend %s not found", backendName)
 }
@@ -41,7 +42,7 @@ func (c *clientNative) BackendCreateIfNotExist(backend models.Backend) {
 	existingBackend := c.backends[backend.Name]
 	existingBackend.Used = true
 	c.backends[backend.Name] = existingBackend
-	if c.BackendExists(backend.Name) {
+	if c.BackendUsed(backend.Name) {
 		return
 	}
 	c.BackendCreateOrUpdate(backend)
@@ -51,17 +52,15 @@ func (c *clientNative) BackendCreateOrUpdate(backend models.Backend) (diff map[s
 	oldBackend, ok := c.backends[backend.Name]
 	if !ok {
 		c.backends[backend.Name] = Backend{
-			BackendBase: backend,
-			Used:        true,
+			Backend: backend,
+			Used:    true,
 		}
 		return nil, true
 	}
 
-	diff = oldBackend.BackendBase.Diff(backend)
+	diff = oldBackend.BackendBase.Diff(backend.BackendBase)
 
-	c.activeTransactionHasChanges = len(diff) > 0
-
-	oldBackend.BackendBase = backend
+	oldBackend.Backend = backend
 	oldBackend.Used = true
 	c.backends[backend.Name] = oldBackend
 	return diff, false
@@ -83,19 +82,18 @@ func (c *clientNative) BackendCfgSnippetSet(backendName string, value []string) 
 		return fmt.Errorf("backend %s : %w", backendName, ErrNotFound)
 	}
 
-	c.activeTransactionHasChanges = slices.Compare(backend.ConfigSnippets, value) != 0
 	backend.ConfigSnippets = value
 	c.backends[backendName] = backend
 	return nil
 }
 
 // To remove ?
-func (c *clientNative) BackendHTTPRequestRuleCreate(backendName string, rule models.HTTPRequestRule) error {
+func (c *clientNative) BackendHTTPRequestRuleCreate(id int64, backendName string, rule models.HTTPRequestRule) error {
 	backend, exists := c.backends[backendName]
 	if !exists {
 		return fmt.Errorf("can't add http request rule for unexisting backend %s, %w", backendName, ErrNotFound)
 	}
-	backend.HTTPRequestsRules = append(backend.HTTPRequestsRules, &rule)
+	backend.HTTPRequestRuleList = append(backend.HTTPRequestRuleList, &rule)
 	c.backends[backendName] = backend
 	return nil
 }
@@ -117,10 +115,9 @@ func (c *clientNative) BackendRuleDeleteAll(backend string) {
 		logger.Error(err)
 		return
 	}
-	c.activeTransactionHasChanges = true
 
 	// Currently we are only using HTTPRequest rules on backend
-	err = configuration.DeleteHTTPRequestRule(0, "backend", backend, c.activeTransaction, 0)
+	err = configuration.DeleteHTTPRequestRule(0, string(parser.Backends), backend, c.activeTransaction, 0)
 	for err != nil {
 		logger.Error(err)
 	}
@@ -240,6 +237,8 @@ func (c *clientNative) BackendServersGet(backendName string) (models.Servers, er
 	return servers, nil
 }
 
+// This function tests if a backend is existing
+// Check if you're not rather looking for BackendUsed function.
 func (c *clientNative) BackendExists(backendName string) (exists bool) {
 	_, exists = c.backends[backendName]
 	return
@@ -251,7 +250,6 @@ func (c *clientNative) BackendDeleteAllUnnecessary() ([]string, error) {
 		return nil, err
 	}
 
-	c.activeTransactionHasChanges = true
 	var errs utils.Errors
 	var backendDeleted []string //nolint:prealloc
 	for _, backend := range c.backends {
@@ -265,4 +263,13 @@ func (c *clientNative) BackendDeleteAllUnnecessary() ([]string, error) {
 		backendDeleted = append(backendDeleted, backendName)
 	}
 	return backendDeleted, errs.Result()
+}
+
+// This function tests if a backend is existing AND IT'S USED.
+func (c *clientNative) BackendUsed(backendName string) bool {
+	backend, exists := c.backends[backendName]
+	if !exists {
+		return false
+	}
+	return backend.Used
 }

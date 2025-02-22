@@ -16,14 +16,18 @@ package store
 
 import (
 	"fmt"
+	"path/filepath"
 
-	"github.com/haproxytech/client-native/v5/models"
-	v1 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v1"
+	"github.com/haproxytech/client-native/v6/models"
+	v3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	rc "github.com/haproxytech/kubernetes-ingress/pkg/reference-counter"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
-const DefaultLocalBackend = "default-local-service"
+const (
+	DefaultLocalBackend = "default-local-service"
+	CONTROLLER          = "haproxy.org/ingress-controller"
+)
 
 type K8s struct {
 	ConfigMaps                   ConfigMaps
@@ -171,11 +175,10 @@ func (k K8s) GetNamespace(name string) *Namespace {
 		Secret:         make(map[string]*Secret),
 		HAProxyRuntime: make(map[string]map[string]*RuntimeBackend),
 		CRs: &CustomResources{
-			Global:     make(map[string]*models.Global),
-			Defaults:   make(map[string]*models.Defaults),
-			LogTargets: make(map[string]models.LogTargets),
-			Backends:   make(map[string]*v1.BackendSpec),
-			TCPsPerCR:  make(map[string]*TCPs),
+			Global:    make(map[string]*models.Global),
+			Defaults:  make(map[string]*models.Defaults),
+			Backends:  make(map[string]*v3.BackendSpec),
+			TCPsPerCR: make(map[string]*TCPs),
 		},
 		Gateways:        make(map[string]*Gateway),
 		TCPRoutes:       make(map[string]*TCPRoute),
@@ -246,4 +249,29 @@ func (k K8s) isRelevantNamespace(namespace string) bool {
 	}
 	_, ok := k.NamespacesAccess.Blacklist[namespace]
 	return !ok
+}
+
+func (k K8s) IsIngressClassSupported(ingressClass, controllerClass string, allowEmptyClass bool) bool {
+	var supported bool
+	var igClassControllerFromSpec string
+	if igClassResource := k.IngressClasses[ingressClass]; igClassResource != nil {
+		igClassControllerFromSpec = igClassResource.Controller
+	}
+	if ingressClass == "" {
+		for _, ingressClass := range k.IngressClasses {
+			if ingressClass.Annotations["ingressclass.kubernetes.io/is-default-class"] == "true" {
+				igClassControllerFromSpec = ingressClass.Controller
+				break
+			}
+		}
+	}
+
+	switch controllerClass {
+	case "":
+		supported = (ingressClass == "" && igClassControllerFromSpec == "") || igClassControllerFromSpec == CONTROLLER
+	default:
+		supported = ingressClass == "" && allowEmptyClass || igClassControllerFromSpec == filepath.Join(CONTROLLER, controllerClass)
+	}
+
+	return supported
 }

@@ -19,8 +19,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/haproxytech/client-native/v5/models"
-	v1 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v1"
+	"github.com/haproxytech/client-native/v6/models"
+	v3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	"github.com/haproxytech/kubernetes-ingress/pkg/annotations"
 	c "github.com/haproxytech/kubernetes-ingress/pkg/controller"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy"
@@ -89,7 +89,7 @@ func (suite *HTTPRequestsSuite) UseHTTPRequestsFixture() (eventChan chan k8ssync
 			FrontHTTP:  "http",
 			FrontHTTPS: "https",
 			FrontSSL:   "ssl",
-			BackSSL:    "ssl",
+			BackSSL:    "ssl-backend",
 		},
 	}
 	haproxyConfig, err := os.ReadFile("../../../../fs/usr/local/etc/haproxy/haproxy.cfg")
@@ -109,30 +109,31 @@ func (suite *HTTPRequestsSuite) UseHTTPRequestsFixture() (eventChan chan k8ssync
 
 	go controller.Start()
 
-	backend := v1.Backend{
+	backend := v3.Backend{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "backend1cr",
 			Namespace: "ns1",
 		},
-		Spec: v1.BackendSpec{
-			Config: &models.Backend{
-				Name: "backend1",
-			},
-			HTTPRequests: models.HTTPRequestRules{
-				{
-					Index:    utils.Ptr[int64](0),
-					Type:     "set-var",
-					VarExpr:  "str({{RUN.serviceId2}})",
-					VarName:  "admintenant",
-					VarScope: "txn",
+		Spec: v3.BackendSpec{
+			Backend: models.Backend{
+				BackendBase: models.BackendBase{
+					Name: "backend1",
 				},
-				{
-					Index:         utils.Ptr[int64](1),
-					Cond:          "if",
-					CondTest:      "cookie_found",
-					TrackSc1Key:   "txn.key",
-					TrackSc1Table: "connected.local",
-					Type:          "track-sc1",
+				HTTPRequestRuleList: models.HTTPRequestRules{
+					{
+						Type:     "set-var",
+						VarExpr:  "str({{RUN.serviceId2}})",
+						VarName:  "admintenant",
+						VarScope: "txn",
+					},
+					{
+						Cond:                "if",
+						CondTest:            "cookie_found",
+						TrackScKey:          "txn.key",
+						TrackScTable:        "connected.local",
+						TrackScStickCounter: utils.PtrInt64(1),
+						Type:                "track-sc",
+					},
 				},
 			},
 		},
@@ -174,12 +175,19 @@ func (suite *HTTPRequestsSuite) UseHTTPRequestsFixture() (eventChan chan k8ssync
 	}
 	eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.SERVICE, Namespace: service.Namespace, Data: service}
 
+	ingressClass := &store.IngressClass{
+		Name:       "haproxy",
+		Controller: "haproxy.org/ingress-controller",
+		Status:     store.ADDED,
+	}
+	eventChan <- k8ssync.SyncDataEvent{SyncType: k8ssync.INGRESS_CLASS, Data: ingressClass}
+
 	ingress := &store.Ingress{
 		IngressCore: store.IngressCore{
-			APIVersion:  store.NETWORKINGV1,
-			Name:        "myapping",
-			Namespace:   ns.Name,
-			Annotations: map[string]string{"haproxy.org/ingress.class": "haproxy"},
+			APIVersion: store.NETWORKINGV1,
+			Name:       "myapping",
+			Namespace:  ns.Name,
+			Class:      "haproxy",
 			Rules: map[string]*store.IngressRule{
 				"": {
 					Paths: map[string]*store.IngressPath{

@@ -1,8 +1,8 @@
 package api
 
 import (
-	parser "github.com/haproxytech/client-native/v5/config-parser"
-	"github.com/haproxytech/client-native/v5/config-parser/types"
+	parser "github.com/haproxytech/client-native/v6/config-parser"
+	"github.com/haproxytech/client-native/v6/config-parser/types"
 )
 
 func (c *clientNative) UserListExistsByGroup(group string) (exist bool, err error) {
@@ -10,7 +10,6 @@ func (c *clientNative) UserListExistsByGroup(group string) (exist bool, err erro
 	if err != nil {
 		return false, err
 	}
-	c.activeTransactionHasChanges = true
 
 	var p parser.Parser
 	var sections []string
@@ -32,7 +31,6 @@ func (c *clientNative) UserListDeleteAll() (err error) {
 	if err != nil {
 		return err
 	}
-	c.activeTransactionHasChanges = true
 
 	var p parser.Parser
 	if p, err = configuration.GetParser(c.activeTransaction); err != nil {
@@ -58,7 +56,6 @@ func (c *clientNative) UserListCreateByGroup(group string, userPasswordMap map[s
 	if err != nil {
 		return err
 	}
-	c.activeTransactionHasChanges = true
 
 	var p parser.Parser
 	if p, err = configuration.GetParser(c.activeTransaction); err != nil {

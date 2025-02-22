@@ -1,14 +1,13 @@
 package api
 
-import "github.com/haproxytech/client-native/v5/models"
+import "github.com/haproxytech/client-native/v6/models"
 
-func (c *clientNative) BackendSwitchingRuleCreate(frontend string, rule models.BackendSwitchingRule) error {
+func (c *clientNative) BackendSwitchingRuleCreate(id int64, frontend string, rule models.BackendSwitchingRule) error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {
 		return err
 	}
-	c.activeTransactionHasChanges = true
-	return configuration.CreateBackendSwitchingRule(frontend, &rule, c.activeTransaction, 0)
+	return configuration.CreateBackendSwitchingRule(id, frontend, &rule, c.activeTransaction, 0)
 }
 
 func (c *clientNative) BackendSwitchingRuleDeleteAll(frontend string) (err error) {
@@ -16,7 +15,6 @@ func (c *clientNative) BackendSwitchingRuleDeleteAll(frontend string) (err error
 	if err != nil {
 		return
 	}
-	c.activeTransactionHasChanges = true
 	_, switchingRules, err := configuration.GetBackendSwitchingRules(frontend, c.activeTransaction)
 	if err != nil {
 		return
@@ -40,4 +38,17 @@ func (c *clientNative) BackendSwitchingRulesGet(frontend string) (models.Backend
 		return nil, err
 	}
 	return bsRules, nil
+}
+
+func (c *clientNative) BackendSwitchingRulesReplace(frontend string, rules models.BackendSwitchingRules) error {
+	configuration, err := c.nativeAPI.Configuration()
+	if err != nil {
+		return err
+	}
+
+	err = configuration.ReplaceBackendSwitchingRules(frontend, rules, c.activeTransaction, 0)
+	if err != nil {
+		return err
+	}
+	return nil
 }

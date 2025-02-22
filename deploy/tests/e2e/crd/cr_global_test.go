@@ -21,11 +21,11 @@ import (
 	"strings"
 	"testing"
 
-	parser "github.com/haproxytech/client-native/v5/config-parser"
-	"github.com/haproxytech/client-native/v5/config-parser/common"
-	"github.com/haproxytech/client-native/v5/config-parser/options"
-	"github.com/haproxytech/client-native/v5/config-parser/params"
-	"github.com/haproxytech/client-native/v5/config-parser/types"
+	parser "github.com/haproxytech/client-native/v6/config-parser"
+	"github.com/haproxytech/client-native/v6/config-parser/common"
+	"github.com/haproxytech/client-native/v6/config-parser/options"
+	"github.com/haproxytech/client-native/v6/config-parser/params"
+	"github.com/haproxytech/client-native/v6/config-parser/types"
 	"github.com/haproxytech/kubernetes-ingress/deploy/tests/e2e"
 	"github.com/stretchr/testify/suite"
 )
@@ -43,8 +43,8 @@ func (suite *GlobalSuite) Test_CR_Global() {
 	suite.Run("CRs OK", func() {
 		initialVersion := suite.getVersion()
 
-		manifest := "config/cr/global-full.yaml"
-		suite.Require().NoError(suite.test.Apply(manifest, "", nil))
+		crdPath := e2e.GetCRDFixturePath() + "/global-full.yaml"
+		suite.Require().NoError(suite.test.Apply(crdPath, "", nil))
 		// Wait for version to be incremented
 		suite.Eventually(func() bool {
 			versionUpdated := suite.getVersion()
@@ -162,7 +162,7 @@ func (suite *GlobalSuite) Test_CR_Global() {
 						Name:  "thread",
 						Value: "all",
 					},
-					&params.BindOptionValue{
+					&params.BindOptionParams{
 						Name:  "quic-cc-algo",
 						Value: "newreno",
 					},
@@ -207,7 +207,7 @@ func (suite *GlobalSuite) Test_CR_Global() {
 			MinLevel: "debug",
 		})
 
-		suite.Require().NoError(suite.test.Delete(manifest))
+		suite.Require().NoError(suite.test.Delete(crdPath))
 	})
 }
 
