@@ -66,6 +66,7 @@ func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {
 				SslCertificate: q.CertDir,
 				Alpn:           "h3",
 				V4v6:           v4v6,
+				QuicCcAlgo:     "bbr",
 			},
 		})
 	}
@@ -92,18 +93,11 @@ func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {
 
 func (q *Quic) disableQUIC(h haproxy.HAProxy) (err error) {
 	errors := utils.Errors{}
-	deleteBind := func(bindName string) (err error) {
-		_, err = h.FrontendBindGet(h.FrontHTTPS, bindName)
-		if err == nil {
-			err = h.FrontendBindDelete(h.FrontHTTPS, bindName)
-		}
-		return
-	}
 	if q.IPv6 {
-		errors.Add(deleteBind(QUIC6BIND))
+		errors.Add(h.FrontendBindDelete(h.FrontHTTPS, QUIC6BIND))
 	}
 	if q.IPv4 {
-		errors.Add(deleteBind(QUIC4BIND))
+		errors.Add(h.FrontendBindDelete(h.FrontHTTPS, QUIC4BIND))
 	}
 	err = errors.Result()
 	if err == nil {

@@ -18,13 +18,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
+	apiingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	versioned "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/clientset/versioned"
 	internalinterfaces "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/informers/externalversions/internalinterfaces"
-	v3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
+	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -35,7 +35,7 @@ import (
 // Defaults.
 type DefaultsInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.DefaultsLister
+	Lister() ingressv3.DefaultsLister
 }
 
 type defaultsInformer struct {
@@ -70,7 +70,7 @@ func NewFilteredDefaultsInformer(client versioned.Interface, namespace string, r
 				return client.IngressV3().Defaults(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&ingressv3.Defaults{},
+		&apiingressv3.Defaults{},
 		resyncPeriod,
 		indexers,
 	)
@@ -81,9 +81,9 @@ func (f *defaultsInformer) defaultInformer(client versioned.Interface, resyncPer
 }
 
 func (f *defaultsInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&ingressv3.Defaults{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiingressv3.Defaults{}, f.defaultInformer)
 }
 
-func (f *defaultsInformer) Lister() v3.DefaultsLister {
-	return v3.NewDefaultsLister(f.Informer().GetIndexer())
+func (f *defaultsInformer) Lister() ingressv3.DefaultsLister {
+	return ingressv3.NewDefaultsLister(f.Informer().GetIndexer())
 }

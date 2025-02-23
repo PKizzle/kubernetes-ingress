@@ -289,7 +289,7 @@ func (statusMgr *StatusManagerImpl) ProcessStatuses() {
 	statusMgr.gateways = nil
 	statusMgr.tcproutes = nil
 	// we update asynchonously all statuses.
-	go statusMgr.UpdateStatusGatewayclasses(copyGatewayclasses)
+	go statusMgr.UpdateStatusGatewayClasses(copyGatewayclasses)
 	go statusMgr.UpdateStatusGateways(copyGatewaysStatusRecords, utils.CopyMapOfMap(statusMgr.numRoutesByListenerByGateway), utils.CopyMapOfMap(statusMgr.previousNumRoutesByListenerByGateway))
 	go statusMgr.UpdateStatusTCPRoutes(copyTCPRouteStatusRecords)
 

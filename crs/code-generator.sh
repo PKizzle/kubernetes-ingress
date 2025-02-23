@@ -22,7 +22,7 @@ done
 # via Kubernetes code generators from k8s.oi/code-generator
 
 CR_DIR=$( cd -- "$( dirname -- "$( readlink -f -- "${BASH_SOURCE[0]}"; )" )" &> /dev/null && pwd )
-OUTPUT_DIR="${CR_DIR}/.generated"
+OUTPUT_DIR="${CR_DIR}/generated"
 HDR_FILE="$( readlink -f -- "${CR_DIR}/../assets/license-header.txt"; )"
 CR_PKG="github.com/haproxytech/kubernetes-ingress/crs"
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -37,9 +37,8 @@ VERSION=$(go list -m  k8s.io/api  | cut -d ' ' -f2)
 GOBIN="$(go env GOBIN)"
 gopath="$(go env GOPATH)"
 gobin="${GOBIN:-$(go env GOPATH)/bin}"
-# new version is completly broken (with breaking changes \o/) use old one
-#go install k8s.io/code-generator/cmd/{deepcopy-gen,register-gen,client-gen,lister-gen,informer-gen,defaulter-gen}@$VERSION
-go install k8s.io/code-generator/cmd/{deepcopy-gen,register-gen,client-gen,lister-gen,informer-gen,defaulter-gen}@v0.29.5
+go install k8s.io/code-generator/cmd/{deepcopy-gen,client-gen,lister-gen,informer-gen,defaulter-gen}@$VERSION
+go install k8s.io/code-generator/cmd/register-gen@v0.31.5 # pin version until https://github.com/kubernetes/kubernetes/issues/129290 is fixed
 
 # Generate Code
 IFS=','
@@ -48,59 +47,42 @@ for API_PKG in $API_PKGS; do
 
     echo "Generating deepcopy funcs"
     GOPATH=$gopath "${gobin}/deepcopy-gen"\
-    -O zz_generated.deepcopy\
-        --input-dirs "${API_PKG}"\
-        --go-header-file "${HDR_FILE}"\
-        --output-base "${OUTPUT_DIR}"
+    --output-file "zz_generated.deepcopy.go"\
+        --go-header-file "${HDR_FILE}" "${API_PKG}"
 
     echo "Generating register funcs"
     GOPATH=$gopath "${gobin}/register-gen"\
-    -O zz_generated.register\
-        --input-dirs "${API_PKG}"\
-        --go-header-file "${HDR_FILE}"\
-        --output-base "${OUTPUT_DIR}"
+    --output-file "zz_generated.register.go"\
+        --go-header-file "${HDR_FILE}" "${API_PKG}"
 
     CR_VERSION=${API_PKG#"$CR_PKG/"}
+
     echo "Generating clientset"
     GOPATH=$gopath "${gobin}/client-gen"\
         --plural-exceptions "Defaults:Defaults"\
         --clientset-name "versioned"\
         --input "${API_PKG}"\
         --input-base "" \
-        --output-package "${CR_PKG}/generated/${CR_VERSION}/clientset"\
+        --output-pkg "${CR_PKG}/generated/${CR_VERSION}/clientset"\
         --go-header-file "${HDR_FILE}"\
-        --output-base "${OUTPUT_DIR}"\
+        --output-dir "${OUTPUT_DIR}/${CR_VERSION}/clientset" "${API_PKG}"
 
     echo "Generating listers"
     GOPATH=$gopath "${gobin}/lister-gen"\
         --plural-exceptions "Defaults:Defaults"\
-        --input-dirs "${API_PKGS}"\
-        --output-package "${CR_PKG}/generated/${CR_VERSION}/listers"\
+        --output-pkg "${CR_PKG}/generated/${CR_VERSION}/listers"\
         --go-header-file "${HDR_FILE}"\
-        --output-base "${OUTPUT_DIR}"
+        --output-dir "${OUTPUT_DIR}/${CR_VERSION}/listers" "${API_PKG}"
 
     echo "Generating informers"
         GOPATH=$gopath "${gobin}/informer-gen"\
             --plural-exceptions "Defaults:Defaults"\
-            --input-dirs "${API_PKG}"\
             --versioned-clientset-package "${CR_PKG}/generated/${CR_VERSION}/clientset/versioned"\
             --listers-package "${CR_PKG}/generated/${CR_VERSION}/listers"\
-            --output-package "${CR_PKG}/generated/${CR_VERSION}/informers"\
+            --output-pkg "${CR_PKG}/generated/${CR_VERSION}/informers"\
             --go-header-file "${HDR_FILE}"\
-            --output-base "${OUTPUT_DIR}"
+            --output-dir "${OUTPUT_DIR}/${CR_VERSION}/informers" "${API_PKG}"
 done
-
-# Copy generated code into the right location
-# This extra step is required because code generator seems to be working only in a GOPATH environment.
-# https://github.com/kubernetes/code-generator/issues/57
-# So the work around is to generate to OUTPUT_DIR then move code to the right location
-find "${OUTPUT_DIR}/${CR_PKG}/api" -mindepth 2 -type f | sed 's|^'"${OUTPUT_DIR}/${CR_PKG}/api/"'||' | xargs -I{} cp "${OUTPUT_DIR}/${CR_PKG}/api/{}" "${CR_DIR}/api/{}"
-for API_PKG in $API_PKGS; do
-	CR_VERSION=${API_PKG#"$CR_PKG/"}
-	mkdir -p "${CR_DIR}/generated"
-	cp -r "${OUTPUT_DIR}/${CR_PKG}/generated/${CR_VERSION}/{clientset,listers,informers}" "${CR_DIR}/generated/${CR_VERSION}"
-done	
-rm -rf "${OUTPUT_DIR}"
 
 CONTROLLER_GEN_VERSION=$(go list -m  sigs.k8s.io/controller-tools  | cut -d ' ' -f2)
 go install sigs.k8s.io/controller-tools/cmd/controller-gen@${CONTROLLER_GEN_VERSION}

@@ -18,13 +18,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
+	apiingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	versioned "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/clientset/versioned"
 	internalinterfaces "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/informers/externalversions/internalinterfaces"
-	v3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
+	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -35,7 +35,7 @@ import (
 // Globals.
 type GlobalInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.GlobalLister
+	Lister() ingressv3.GlobalLister
 }
 
 type globalInformer struct {
@@ -70,7 +70,7 @@ func NewFilteredGlobalInformer(client versioned.Interface, namespace string, res
 				return client.IngressV3().Globals(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&ingressv3.Global{},
+		&apiingressv3.Global{},
 		resyncPeriod,
 		indexers,
 	)
@@ -81,9 +81,9 @@ func (f *globalInformer) defaultInformer(client versioned.Interface, resyncPerio
 }
 
 func (f *globalInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&ingressv3.Global{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiingressv3.Global{}, f.defaultInformer)
 }
 
-func (f *globalInformer) Lister() v3.GlobalLister {
-	return v3.NewGlobalLister(f.Informer().GetIndexer())
+func (f *globalInformer) Lister() ingressv3.GlobalLister {
+	return ingressv3.NewGlobalLister(f.Informer().GetIndexer())
 }

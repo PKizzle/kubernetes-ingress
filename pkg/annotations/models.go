@@ -49,7 +49,7 @@ func ModelGlobal(name, defaultNS string, k store.K8s, annotations ...map[string]
 	return
 }
 
-// ModelLog takes an annotation holding the path of a global cr and returns corresponding LogTargerts model
+// ModelLog takes an annotation holding the path of a global cr and returns corresponding LogTargets model
 func ModelLog(name, defaultNS string, k store.K8s, annotations ...map[string]string) (log models.LogTargets, err error) {
 	l, modelErr := model(name, defaultNS, 1, k, annotations...)
 	if modelErr != nil {

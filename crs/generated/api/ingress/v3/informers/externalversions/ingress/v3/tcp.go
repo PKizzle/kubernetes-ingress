@@ -18,13 +18,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
+	apiingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	versioned "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/clientset/versioned"
 	internalinterfaces "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/informers/externalversions/internalinterfaces"
-	v3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
+	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -35,7 +35,7 @@ import (
 // TCPs.
 type TCPInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.TCPLister
+	Lister() ingressv3.TCPLister
 }
 
 type tCPInformer struct {
@@ -70,7 +70,7 @@ func NewFilteredTCPInformer(client versioned.Interface, namespace string, resync
 				return client.IngressV3().TCPs(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&ingressv3.TCP{},
+		&apiingressv3.TCP{},
 		resyncPeriod,
 		indexers,
 	)
@@ -81,9 +81,9 @@ func (f *tCPInformer) defaultInformer(client versioned.Interface, resyncPeriod t
 }
 
 func (f *tCPInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&ingressv3.TCP{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiingressv3.TCP{}, f.defaultInformer)
 }
 
-func (f *tCPInformer) Lister() v3.TCPLister {
-	return v3.NewTCPLister(f.Informer().GetIndexer())
+func (f *tCPInformer) Lister() ingressv3.TCPLister {
+	return ingressv3.NewTCPLister(f.Informer().GetIndexer())
 }

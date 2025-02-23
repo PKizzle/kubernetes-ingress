@@ -26,7 +26,6 @@ metadata:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/1086
     gateway.networking.k8s.io/bundle-version: v0.5.1
     gateway.networking.k8s.io/channel: experimental
-  creationTimestamp: null
   name: gatewayclasses.gateway.networking.k8s.io
 spec:
   group: gateway.networking.k8s.io
@@ -460,7 +459,6 @@ metadata:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/1086
     gateway.networking.k8s.io/bundle-version: v0.5.1
     gateway.networking.k8s.io/channel: experimental
-  creationTimestamp: null
   name: gateways.gateway.networking.k8s.io
 spec:
   group: gateway.networking.k8s.io
@@ -1881,7 +1879,6 @@ metadata:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/1086
     gateway.networking.k8s.io/bundle-version: v0.5.1
     gateway.networking.k8s.io/channel: experimental
-  creationTimestamp: null
   name: httproutes.gateway.networking.k8s.io
 spec:
   group: gateway.networking.k8s.io
@@ -5117,7 +5114,6 @@ metadata:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/1086
     gateway.networking.k8s.io/bundle-version: v0.5.1
     gateway.networking.k8s.io/channel: experimental
-  creationTimestamp: null
   name: referencegrants.gateway.networking.k8s.io
 spec:
   group: gateway.networking.k8s.io
@@ -5270,7 +5266,6 @@ metadata:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/1086
     gateway.networking.k8s.io/bundle-version: v0.5.1
     gateway.networking.k8s.io/channel: experimental
-  creationTimestamp: null
   name: referencepolicies.gateway.networking.k8s.io
 spec:
   group: gateway.networking.k8s.io
@@ -5428,7 +5423,6 @@ metadata:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/1086
     gateway.networking.k8s.io/bundle-version: v0.5.1
     gateway.networking.k8s.io/channel: experimental
-  creationTimestamp: null
   name: tcproutes.gateway.networking.k8s.io
 spec:
   group: gateway.networking.k8s.io
@@ -5925,7 +5919,6 @@ metadata:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/1086
     gateway.networking.k8s.io/bundle-version: v0.5.1
     gateway.networking.k8s.io/channel: experimental
-  creationTimestamp: null
   name: tlsroutes.gateway.networking.k8s.io
 spec:
   group: gateway.networking.k8s.io
@@ -6471,7 +6464,6 @@ metadata:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/1086
     gateway.networking.k8s.io/bundle-version: v0.5.1
     gateway.networking.k8s.io/channel: experimental
-  creationTimestamp: null
   name: udproutes.gateway.networking.k8s.io
 spec:
   group: gateway.networking.k8s.io
@@ -7086,7 +7078,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: gateway-api-admission
-  annotations:
   labels:
     name: gateway-api-webhook
   namespace: gateway-system
@@ -7103,7 +7094,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: gateway-api-admission
-  annotations:
   labels:
     name: gateway-api-webhook
   namespace: gateway-system
@@ -7120,7 +7110,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: gateway-api-admission
-  annotations:
   labels:
     name: gateway-api-webhook
   namespace: gateway-system
@@ -7137,7 +7126,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: gateway-api-admission
-  annotations:
   labels:
     name: gateway-api-webhook
   namespace: gateway-system

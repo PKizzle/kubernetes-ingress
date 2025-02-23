@@ -18,13 +18,13 @@
 package v1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	ingressv1 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v1"
+	apiingressv1 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v1"
 	versioned "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v1/clientset/versioned"
 	internalinterfaces "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v1/informers/externalversions/internalinterfaces"
-	v1 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v1/listers/ingress/v1"
+	ingressv1 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v1/listers/ingress/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -35,7 +35,7 @@ import (
 // Backends.
 type BackendInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.BackendLister
+	Lister() ingressv1.BackendLister
 }
 
 type backendInformer struct {
@@ -70,7 +70,7 @@ func NewFilteredBackendInformer(client versioned.Interface, namespace string, re
 				return client.IngressV1().Backends(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&ingressv1.Backend{},
+		&apiingressv1.Backend{},
 		resyncPeriod,
 		indexers,
 	)
@@ -81,9 +81,9 @@ func (f *backendInformer) defaultInformer(client versioned.Interface, resyncPeri
 }
 
 func (f *backendInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&ingressv1.Backend{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiingressv1.Backend{}, f.defaultInformer)
 }
 
-func (f *backendInformer) Lister() v1.BackendLister {
-	return v1.NewBackendLister(f.Informer().GetIndexer())
+func (f *backendInformer) Lister() ingressv1.BackendLister {
+	return ingressv1.NewBackendLister(f.Informer().GetIndexer())
 }

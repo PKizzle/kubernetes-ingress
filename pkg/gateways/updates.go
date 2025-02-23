@@ -25,8 +25,8 @@ import (
 	"sigs.k8s.io/gateway-api/apis/v1beta1"
 )
 
-// UpdateStatusGatewayclasses is responsible of updating the statuses of the accepted gateway classes.
-func (statusMgr *StatusManagerImpl) UpdateStatusGatewayclasses(gatewayclasses []store.GatewayClass) {
+// UpdateStatusGatewayClasses is responsible of updating the statuses of the accepted gateway classes.
+func (statusMgr *StatusManagerImpl) UpdateStatusGatewayClasses(gatewayclasses []store.GatewayClass) {
 	transitionTime := metav1.NewTime(time.Now())
 	for _, gwClass := range gatewayclasses {
 		if gwClass.Status == store.EMPTY || gwClass.Status == store.DELETED {
