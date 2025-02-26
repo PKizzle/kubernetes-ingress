@@ -15,6 +15,7 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -27,6 +28,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
+
+func GracefulCRDUpdate(clientset *apiextensionsclientset.Clientset, crd *apiextensionsv1.CustomResourceDefinition) error {
+	for range 3 {
+		_, err := clientset.ApiextensionsV1().CustomResourceDefinitions().Update(context.Background(), crd, metav1.UpdateOptions{})
+		if err == nil {
+			return nil
+		}
+		if !apiError.IsConflict(err) && !apiError.IsGone(err) {
+			return err
+		}
+		time.Sleep(time.Second)
+	}
+	return nil
+}
 
 func CRDRefresh(log utils.Logger, osArgs utils.OSArgs) error {
 	log.Info("checking CRDs")
@@ -70,46 +85,46 @@ func CRDRefresh(log utils.Logger, osArgs utils.OSArgs) error {
 			log.Infof("CRD %s empty ?", crdName)
 			continue
 		}
-		// check if we have v1 and newest CN version
+
+		// Set the resource version for update
 		crd.ObjectMeta.ResourceVersion = existingVersion.ObjectMeta.ResourceVersion
+
 		if versions[0].Name == "v3" {
 			cnInK8s, ok := existingVersion.ObjectMeta.Annotations["haproxy.org/client-native"]
-
-			needUpgrade := false
-			if !ok {
-				needUpgrade = true
-			}
 			cnNew := crd.ObjectMeta.Annotations["haproxy.org/client-native"]
-			vK8s, err := semver.NewVersion(cnInK8s)
+
+			needUpgrade := !ok
+			var vK8s, vNew *semver.Version
+
+			vK8s, err = semver.NewVersion(cnInK8s)
 			if err != nil {
 				needUpgrade = true
 				log.Error(err.Error())
 			}
-			vNew, err := semver.NewVersion(cnNew)
+
+			vNew, err = semver.NewVersion(cnNew)
 			if err != nil {
 				needUpgrade = true
 				log.Error(err.Error())
 			}
-			log.Infof("CRD %s exists as v1, CN[v%s]", crdName, vK8s.String())
-			if needUpgrade || vNew.GreaterThan(vK8s) {
-				// Upgrade the CRDl
-				for i := 0; i < 3; i++ {
-					_, err = clientset.ApiextensionsV1().CustomResourceDefinitions().Update(context.Background(), &crd, metav1.UpdateOptions{})
-					if err != nil {
-						if apiError.IsConflict(err) || apiError.IsGone(err) {
-							time.Sleep(time.Second)
-							continue
-						}
-						return err
-					}
-					break
+
+			if ok && vK8s != nil {
+				log.Infof("CRD %s exists as v1, CN[v%s]", crdName, vK8s.String())
+			}
+
+			if needUpgrade || (vNew != nil && vK8s != nil && vNew.GreaterThan(vK8s)) {
+				if err = GracefulCRDUpdate(clientset, &crd); err != nil {
+					return err
 				}
-				log.Infof("CRD %s updated, CN[v%s] -> CN[v%s]", crdName, vK8s.String(), vNew.String())
+
+				versionInfo := ""
+				if vK8s != nil && vNew != nil {
+					versionInfo = fmt.Sprintf(", CN[v%s] -> CN[v%s]", vK8s.String(), vNew.String())
+				}
+				log.Infof("CRD %s updated%s", crdName, versionInfo)
 			}
-			continue
 		} else {
-			_, err = clientset.ApiextensionsV1().CustomResourceDefinitions().Update(context.Background(), &crd, metav1.UpdateOptions{})
-			if err != nil {
+			if err = GracefulCRDUpdate(clientset, &crd); err != nil {
 				return err
 			}
 			log.Infof("CRD %s updated", crdName)
