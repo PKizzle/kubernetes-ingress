@@ -158,6 +158,10 @@ func New(osArgs utils.OSArgs, whitelist map[string]struct{}, publishSvc *utils.N
 	k.registerCoreCRV3(NewDefaultsCRV3())
 	k.registerCoreCRV3(NewBackendCRV3())
 	k.registerCoreCRV3(NewTCPCRV3())
+
+	if len(k.crsV1) > 0 && len(k.crsV3) > 0 {
+		logger.Infof("Both CRD v1 and v3 resources have been detected. Make sure to use the CRD Converter (--input-file and --output-file) to automatically upgrade any existing v1 resources.")
+	}
 	return k
 }
 
@@ -236,18 +240,23 @@ func (k k8s) runCRInformers(eventChan chan k8ssync.SyncDataEvent, stop chan stru
 	informersSynced *[]cache.InformerSynced, crsV1 map[string]CRV1, crsV3 map[string]CRV3,
 	osArgs utils.OSArgs,
 ) {
-	informerFactoryV3 := crinformersv3.NewSharedInformerFactoryWithOptions(k.crClientV3, k.cacheResyncPeriod, crinformersv3.WithNamespace(namespace))
-	informerFactoryV1 := crinformersv1.NewSharedInformerFactoryWithOptions(k.crClientV1, k.cacheResyncPeriod, crinformersv1.WithNamespace(namespace))
+	if len(crsV1) > 0 {
+		informerFactoryV1 := crinformersv1.NewSharedInformerFactoryWithOptions(k.crClientV1, k.cacheResyncPeriod, crinformersv1.WithNamespace(namespace))
 
-	for _, cr := range crsV1 {
-		informer := cr.GetInformerV1(eventChan, informerFactoryV1)
-		go informer.Run(stop)
-		*informersSynced = append(*informersSynced, informer.HasSynced)
+		for _, cr := range crsV1 {
+			informer := cr.GetInformerV1(eventChan, informerFactoryV1)
+			go informer.Run(stop)
+			*informersSynced = append(*informersSynced, informer.HasSynced)
+		}
 	}
-	for _, cr := range crsV3 {
-		informer := cr.GetInformerV3(eventChan, informerFactoryV3, osArgs)
-		go informer.Run(stop)
-		*informersSynced = append(*informersSynced, informer.HasSynced)
+	if len(crsV3) > 0 {
+		informerFactoryV3 := crinformersv3.NewSharedInformerFactoryWithOptions(k.crClientV3, k.cacheResyncPeriod, crinformersv3.WithNamespace(namespace))
+
+		for _, cr := range crsV3 {
+			informer := cr.GetInformerV3(eventChan, informerFactoryV3, osArgs)
+			go informer.Run(stop)
+			*informersSynced = append(*informersSynced, informer.HasSynced)
+		}
 	}
 }
 
