@@ -57,7 +57,7 @@ func (handler HTTPS) bindList(h haproxy.HAProxy) (binds []models.Bind) {
 	addBind := func(address string, name string, v4v6 bool) {
 		binds = append(binds, models.Bind{
 			Address: address,
-			Port: utils.PtrInt64(handler.Port),
+			Port:    utils.PtrInt64(handler.Port),
 			BindParams: models.BindParams{
 				Name:        name,
 				AcceptProxy: false,

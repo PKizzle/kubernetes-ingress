@@ -40,7 +40,6 @@ func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {
 	}
 
 	existingBinds, err := h.FrontendBindsGet(h.FrontHTTPS)
-
 	if err != nil {
 		return
 	}
