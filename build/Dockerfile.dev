@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM haproxytech/haproxy-alpine:3.1.5
+FROM haproxytech/haproxy-alpine:3.2-dev16
 
 ARG TARGETPLATFORM
 
