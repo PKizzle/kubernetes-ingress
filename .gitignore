@@ -7,5 +7,6 @@ dist/
 bin/golangci-lint
 bin/check-commit
 .local/*
+__debug_bin*
 *.DS_Store
 vendor
