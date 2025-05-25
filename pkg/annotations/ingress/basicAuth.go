@@ -76,7 +76,7 @@ func (a ReqAuthAnn) Process(k store.K8s, annotations ...map[string]string) (err 
 		}
 		a.parent.authRule.Credentials = make(map[string][]byte)
 		for u, pwd := range secret.Data {
-			if pwd[len(pwd)-1] == '\n' {
+			if len(pwd) > 0 && pwd[len(pwd)-1] == '\n' {
 				// logger.Warningf("Ingress %s/%s: basic-auth: password for user %s ends with '\\n'. Ignoring last character.", ingress.Namespace, ingress.Name, u)
 				pwd = pwd[:len(pwd)-1]
 			}

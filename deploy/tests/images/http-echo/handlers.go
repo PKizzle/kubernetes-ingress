@@ -27,9 +27,11 @@ func (c context) echoAll(writer http.ResponseWriter, request *http.Request) {
 	log.Println(request.RemoteAddr)
 	// TCP
 	parts := strings.Split(request.RemoteAddr, ":")
-	attr["tcp"] = map[string]string{
-		"ip":   strings.Join(parts[:(len(parts)-1)], ":"),
-		"port": parts[len(parts)-1],
+	if len(parts) > 0 {
+		attr["tcp"] = map[string]string{
+			"ip":   strings.Join(parts[:(len(parts)-1)], ":"),
+			"port": parts[len(parts)-1],
+		}
 	}
 	// TLS
 	if request.TLS != nil {
