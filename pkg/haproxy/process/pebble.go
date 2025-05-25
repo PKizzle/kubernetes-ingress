@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/haproxytech/client-native/v6/runtime"
@@ -57,48 +56,13 @@ func (d *pebbleControl) Service(action string) error {
 		return nil
 	case "reload":
 		if d.masterSocketValid {
-			// Enhanced reload with better error handling and diagnostics
-			d.logger.Tracef("Attempting masterSocket.Reload() operation via pebble")
-
-			// Before reload, capture more diagnostic information
-			if debugResult, debugErr := d.masterSocket.ExecuteRaw("show stats"); debugErr == nil {
-				d.logger.Tracef("HAProxy stats response length: %d bytes", len(debugResult))
-			}
-
-			// Try raw reload command to see exact response
-			if reloadRawResult, reloadRawErr := d.masterSocket.ExecuteRaw("reload"); reloadRawErr == nil {
-				d.logger.Tracef("Raw reload command response: %q (length: %d)", string(reloadRawResult), len(reloadRawResult))
-			} else {
-				d.logger.Errorf("Raw reload command failed: %v", reloadRawErr)
-			}
-
-			// Perform the actual reload using the library
 			msg, err := d.masterSocket.Reload()
 			if err != nil {
-				d.logger.Errorf("masterSocket.Reload() failed: %v", err)
-
-				// Provide detailed error analysis with enhanced diagnostics
-				if strings.Contains(err.Error(), "unknown status") {
-					d.logger.Errorf("HAProxy returned unknown status - detailed diagnostics:")
-					d.logger.Errorf("  Error details: %q", err.Error())
-					d.logger.Errorf("  This may indicate:")
-					d.logger.Errorf("    1. Client-native library parsing issue")
-					d.logger.Errorf("    2. HAProxy response format incompatibility")
-					d.logger.Errorf("    3. Empty or malformed reload response")
-
-					// Get HAProxy version for compatibility analysis
-					if versionResult, versionErr := d.masterSocket.ExecuteRaw("show version"); versionErr == nil {
-						d.logger.Errorf("  HAProxy version: %q", string(versionResult))
-					}
-				}
-
-				d.logger.Errorf("Falling back to pebble signal for reload")
-			} else {
-				d.logger.Debug("Reload done via master socket")
-				d.logger.Debug(msg)
-				d.logger.Tracef("masterSocket.Reload() completed successfully")
-				return nil
+				d.logger.Error(err)
 			}
+			d.logger.Debug("Reload done")
+			d.logger.Debug(msg)
+			return err
 		}
 		cmd = exec.Command("pebble", "signal", "SIGUSR2", "haproxy")
 		cmd.Stdout = os.Stdout
