@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/haproxytech/client-native/v6/runtime"
@@ -58,12 +60,42 @@ func (d *s6Control) Service(action string) error {
 		return nil
 	case "reload":
 		if d.masterSocketValid {
-			msg, err := d.masterSocket.Reload()
-			if err == nil {
-				d.logger.Debug(msg)
+			// Enhanced panic recovery for client-native runtime reload
+			var reloadErr error
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// Enhanced panic logging with stack trace
+						stackTrace := debug.Stack()
+						d.logger.Errorf("masterSocket.Reload() panicked: %v", r)
+						d.logger.Errorf("Panic stack trace: %s", string(stackTrace))
+
+						// Log detailed panic information
+						if panicErr, ok := r.(error); ok && strings.Contains(panicErr.Error(), "slice bounds out of range") {
+							d.logger.Errorf("Detected slice bounds panic - this may indicate empty output from HAProxy reload command")
+						}
+
+						d.masterSocketValid = false
+						reloadErr = fmt.Errorf("runtime reload panicked: %v", r)
+					}
+				}()
+
+				d.logger.Tracef("Attempting masterSocket.Reload() operation")
+				msg, err := d.masterSocket.Reload()
+				if err == nil {
+					d.logger.Debug(msg)
+					d.logger.Tracef("masterSocket.Reload() completed successfully")
+					reloadErr = nil
+				} else {
+					d.logger.Errorf("masterSocket.Reload() returned error: %v", err)
+					reloadErr = err
+				}
+			}()
+
+			if reloadErr == nil {
 				return nil
 			}
-			d.logger.Error(err)
+			d.logger.Errorf("masterSocket reload failed, falling back to s6-svc reload: %v", reloadErr)
 		}
 
 		cmd = exec.Command("s6-svc", "-2", "/run/service/haproxy")
