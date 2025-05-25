@@ -42,11 +42,11 @@ RUN --mount=type=cache,sharing=locked,target=/go/pkg/mod \
         -ldflags "-X github.com/haproxytech/kubernetes-ingress/pkg/version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG)" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-alpine-quic:3.2-dev16
+FROM haproxytech/haproxy-alpine-quic:3.2-dev17
 
 ARG TARGETPLATFORM
 
-ARG S6_OVERLAY_VERSION=3.2.0.2
+ARG S6_OVERLAY_VERSION=3.2.1.0
 ENV S6_OVERLAY_VERSION $S6_OVERLAY_VERSION
 ENV S6_READ_ONLY_ROOT=1
 ENV S6_USER=haproxy
