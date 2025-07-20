@@ -75,7 +75,7 @@ func (handler HTTPS) bindList(h haproxy.HAProxy) (binds []models.Bind) {
 	return binds
 }
 
-func (handler HTTPS) bindListPassthrough(h haproxy.HAProxy) (binds []models.Bind) {
+func (handler *HTTPS) bindListPassthrough(h haproxy.HAProxy) (binds []models.Bind) {
 	binds = append(binds, models.Bind{
 		Address: "unix@" + handler.unixSocketPath(h),
 		BindParams: models.BindParams{
@@ -86,11 +86,11 @@ func (handler HTTPS) bindListPassthrough(h haproxy.HAProxy) (binds []models.Bind
 	return binds
 }
 
-func (handler HTTPS) unixSocketPath(h haproxy.HAProxy) string {
+func (handler *HTTPS) unixSocketPath(h haproxy.HAProxy) string {
 	return path.Join(h.Env.RuntimeDir, "ssl-frontend.sock")
 }
 
-func (handler HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err error) {
+func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err error) {
 	// Parsing
 	var caFile string
 	var notFound store.ErrNotFound
@@ -155,7 +155,7 @@ func (handler HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err er
 	return
 }
 
-func (handler HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
 	if !handler.Enabled {
 		logger.Debug("Cannot proceed with SSL Passthrough update, HTTPS is disabled")
 		return nil
@@ -200,7 +200,7 @@ func (handler HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annota
 	return nil
 }
 
-func (handler HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
+func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
 	// Create TCP frontend for ssl-passthrough
 	frontend := models.FrontendBase{
 		Name:           h.FrontSSL,
@@ -240,7 +240,7 @@ func (handler HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
 	return errors.Result()
 }
 
-func (handler HTTPS) disableSSLPassthrough(h haproxy.HAProxy) (err error) {
+func (handler *HTTPS) disableSSLPassthrough(h haproxy.HAProxy) (err error) {
 	err = h.FrontendDelete(h.FrontSSL)
 	if err != nil {
 		return err
@@ -253,7 +253,7 @@ func (handler HTTPS) disableSSLPassthrough(h haproxy.HAProxy) (err error) {
 	return nil
 }
 
-func (handler HTTPS) toggleSSLPassthrough(passthrough bool, h haproxy.HAProxy) (err error) {
+func (handler *HTTPS) toggleSSLPassthrough(passthrough bool, h haproxy.HAProxy) (err error) {
 	handler.deleteHTTPSFrontendBinds(h)
 	bindListFunc := handler.bindList
 	if passthrough {
@@ -270,7 +270,7 @@ func (handler HTTPS) toggleSSLPassthrough(passthrough bool, h haproxy.HAProxy) (
 	return nil
 }
 
-func (handler HTTPS) deleteHTTPSFrontendBinds(h haproxy.HAProxy) {
+func (handler *HTTPS) deleteHTTPSFrontendBinds(h haproxy.HAProxy) {
 	bindsToDelete := []string{BIND_IP_V4, BIND_IP_V6, BIND_UNIX_SOCKET}
 	for _, bind := range bindsToDelete {
 		if err := h.FrontendBindDelete(h.FrontHTTPS, bind); err != nil {
@@ -279,7 +279,7 @@ func (handler HTTPS) deleteHTTPSFrontendBinds(h haproxy.HAProxy) {
 	}
 }
 
-func (handler HTTPS) sslPassthroughRules(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
+func (handler *HTTPS) sslPassthroughRules(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	inspectTimeout, err := a.Timeout("timeout-client", k.ConfigMaps.Main.Annotations)
 	if inspectTimeout == nil {
 		if err != nil {

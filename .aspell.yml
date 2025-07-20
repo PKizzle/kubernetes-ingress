@@ -40,3 +40,15 @@ allowed:
   - configmaps
   - namespace
   - namespaces
+  - http
+  - CORS
+  - dataplaneapi
+  - usr
+  - Redispatch
+  - backport
+  - cmd
+  - backports
+  - alpn
+  - SNI
+  - gwapi
+  - init

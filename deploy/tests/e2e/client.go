@@ -112,7 +112,7 @@ func NewHTTPSClient(host string, port ...int) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) Do() (res *http.Response, closeFunc func() error, err error) {
+func (c *Client) DoMethod(method string) (res *http.Response, closeFunc func() error, err error) {
 	client := &http.Client{}
 	if c.Transport != nil {
 		client.Transport = c.Transport
@@ -126,12 +126,21 @@ func (c *Client) Do() (res *http.Response, closeFunc func() error, err error) {
 	c.Req.Header["Origin"] = []string{c.Req.URL.Scheme + "://" + c.Host}
 	c.Req.URL.Host = c.Host
 	c.Req.URL.Path = c.Path
+	c.Req.Method = method
 	res, err = client.Do(c.Req)
 	if err != nil {
 		return
 	}
 	closeFunc = res.Body.Close
 	return
+}
+
+func (c *Client) Do() (res *http.Response, closeFunc func() error, err error) {
+	return c.DoMethod("GET")
+}
+
+func (c *Client) DoOptions() (res *http.Response, closeFunc func() error, err error) {
+	return c.DoMethod("OPTIONS")
 }
 
 func ProxyProtoConn() (result []byte, err error) {
@@ -193,7 +202,7 @@ func runtimeCommand(command string) (result []byte, err error) {
 	if err != nil {
 		return
 	}
-	result = make([]byte, 1024)
+	result = make([]byte, 2048)
 	_, err = conn.Read(result)
 	conn.Close()
 	return
@@ -208,7 +217,7 @@ func GetHAProxyMapCount(mapName string) (count int, err error) {
 	scanner := bufio.NewScanner(bytes.NewReader(result))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.Contains(line, mapName) {
+		if strings.Contains(line, mapName+".map") {
 			r := regexp.MustCompile("entry_cnt=[0-9]*")
 			match := r.FindString(line)
 			nbr := strings.Split(match, "=")[1]

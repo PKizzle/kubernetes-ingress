@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	k8sinformers "k8s.io/client-go/informers"
@@ -99,7 +100,6 @@ type k8s struct {
 	initialSyncPeriod      time.Duration
 	cacheResyncPeriod      time.Duration
 	disableSvcExternalName bool // CVE-2021-25740
-	gatewayAPIInstalled    bool
 }
 
 func New(osArgs utils.OSArgs, whitelist map[string]struct{}, publishSvc *utils.NamespaceValue) K8s { //nolint:ireturn
@@ -209,23 +209,6 @@ func (k k8s) MonitorChanges(eventChan chan k8ssync.SyncDataEvent, stop chan stru
 	}
 }
 
-func (k k8s) registerCoreCRV3(cr CRV3) {
-	groupVersion := CRSGroupVersionV3
-	resources, err := k.crClientV3.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
-	if err != nil {
-		return
-	}
-	logger.Debugf("Custom API %s available", groupVersion)
-	kindName := cr.GetKind()
-	for _, resource := range resources.APIResources {
-		if resource.Kind == kindName {
-			k.crsV3[resources.GroupVersion+" - "+kindName] = cr
-			logger.Infof("%s CR defined in API %s", kindName, resources.GroupVersion)
-			break
-		}
-	}
-}
-
 func (k k8s) registerCoreCRV1(cr CRV1) {
 	groupVersion := CRSGroupVersionV1
 	resources, err := k.crClientV1.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
@@ -234,9 +217,28 @@ func (k k8s) registerCoreCRV1(cr CRV1) {
 	}
 	logger.Debugf("Custom API %s available", groupVersion)
 	kindName := cr.GetKind()
+	groupVersion = strings.Split(resources.GroupVersion, "/")[0]
 	for _, resource := range resources.APIResources {
 		if resource.Kind == kindName {
-			k.crsV1[resources.GroupVersion+" - "+kindName] = cr
+			k.crsV1[groupVersion+" - "+kindName] = cr
+			logger.Infof("%s CR defined in API %s", kindName, resources.GroupVersion)
+			break
+		}
+	}
+}
+
+func (k k8s) registerCoreCRV3(cr CRV3) {
+	groupVersion := CRSGroupVersionV3
+	resources, err := k.crClientV3.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
+	if err != nil {
+		return
+	}
+	logger.Debugf("Custom API %s available", groupVersion)
+	kindName := cr.GetKind()
+	groupVersion = strings.Split(resources.GroupVersion, "/")[0]
+	for _, resource := range resources.APIResources {
+		if resource.Kind == kindName {
+			k.crsV3[groupVersion+" - "+kindName] = cr
 			logger.Infof("%s CR defined in API %s", kindName, resources.GroupVersion)
 			break
 		}
@@ -414,9 +416,6 @@ func getWhitelistedNS(whitelist map[string]struct{}, cfgMapNS string) []string {
 
 func (k k8s) IsGatewayAPIInstalled(gatewayControllerName string) (installed bool) {
 	installed = true
-	defer func() {
-		k.gatewayAPIInstalled = installed
-	}()
 	gatewayCrd, err := k.crdClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.Background(), "gateways.gateway.networking.k8s.io", metav1.GetOptions{})
 	if err != nil {
 		var errStatus *errGw.StatusError
