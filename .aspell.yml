@@ -52,3 +52,6 @@ allowed:
   - SNI
   - gwapi
   - init
+  - svc
+  - frontent
+  - pprof

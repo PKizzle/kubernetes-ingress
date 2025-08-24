@@ -3,6 +3,7 @@ module github.com/haproxytech/kubernetes-ingress
 go 1.24.3
 
 require (
+	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/brianvoe/gofakeit/v7 v7.4.0
 	github.com/fasthttp/router v1.5.4
