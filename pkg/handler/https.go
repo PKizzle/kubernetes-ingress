@@ -100,21 +100,21 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err e
 			logger.Warningf("client TLS Auth: %s", annErr)
 		} else {
 			err = fmt.Errorf("client TLS Auth: %w", annErr)
-			return
+			return err
 		}
 	}
 	if secret != nil {
 		caFile, err = h.Certificates.AddSecret(secret, certs.CA_CERT)
 		if err != nil {
 			err = fmt.Errorf("client TLS Auth: %w", err)
-			return
+			return err
 		}
 	}
 
 	binds, bindsErr := h.FrontendBindsGet(h.FrontHTTPS)
 	if bindsErr != nil {
 		err = fmt.Errorf("client TLS Auth: %w", bindsErr)
-		return
+		return err
 	}
 
 	var enabled bool
@@ -127,7 +127,7 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err e
 
 	// No changes
 	if binds[0].SslCafile == caFile && (caFile == "" || binds[0].Verify == verify) {
-		return
+		return err
 	}
 	// Removing config
 	if caFile == "" {
@@ -140,7 +140,7 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err e
 			}
 		}
 		instance.Reload("removed client TLS authentication")
-		return
+		return err
 	}
 	// Updating config
 	logger.Info("configuring client TLS authentication")
@@ -152,7 +152,7 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err e
 		}
 	}
 	instance.Reload("configured client TLS authentication")
-	return
+	return err
 }
 
 func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
