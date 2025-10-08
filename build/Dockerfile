@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM haproxytech/haproxy-alpine:3.2 AS builder-c
+FROM haproxytech/haproxy-alpine-quic:3.2.6 AS builder-c
 RUN apk add --no-cache build-base gcc musl-dev
 WORKDIR /src
 
