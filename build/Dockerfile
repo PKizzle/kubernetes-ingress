@@ -12,11 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=${BUILDPLATFORM} golang:1.25-alpine AS builder
+FROM haproxytech/haproxy-alpine:3.2 AS builder-c
+RUN apk add --no-cache build-base gcc musl-dev
+WORKDIR /src
 
-ARG TARGETOS
-ARG TARGETARCH
-ARG TARGETVARIANT
+COPY pkg/protection/block_secrets.c .
+COPY pkg/protection/haproxy_wrapper.c .
+RUN gcc -O3 -Wall -flto -fPIC -shared -s -o libblock_secrets.so block_secrets.c -ldl
+RUN gcc -O3 -Wall -g -s -o haproxy_wrapper haproxy_wrapper.c
+
+FROM --platform=${BUILDPLATFORM} golang:1.25-alpine AS builder
+RUN apk --no-cache add git openssh
 
 ARG GOOS=$TARGETOS
 ARG GOARCH=$TARGETARCH
@@ -53,14 +59,16 @@ ENV S6_USER=haproxy
 ENV S6_GROUP=haproxy
 
 COPY /fs /
+COPY --from=builder-c /src/libblock_secrets.so /usr/local/lib/libblock_secrets.so
+COPY --from=builder-c /src/haproxy_wrapper /usr/local/sbin/haproxy_wrapper
 
 RUN apk update && \
     apk --no-cache add socat openssl util-linux htop tzdata curl libcap bash && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi /etc/haproxy/dataplaneapi.yml && \
-	rm -f /usr/local/bin/dataplaneapi-v2 /usr/bin/dataplaneapi-v2 && \
-    chown -R haproxy:haproxy /usr/local/etc/haproxy /run /var && \
-    chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
-    setcap 'cap_net_bind_service=+ep' /usr/local/sbin/haproxy && \
+    rm -f /usr/local/bin/dataplaneapi-v2 /usr/bin/dataplaneapi-v2 && \
+    chown -R haproxy:haproxy /usr/local/etc/haproxy /run /var /usr/local/sbin/haproxy_wrapper && \
+    chmod -R ug+rwx /usr/local/etc/haproxy /run /var /usr/local/sbin/haproxy_wrapper && \
+    setcap 'cap_net_bind_service=+ep' /usr/local/sbin/haproxy_wrapper && \
     case "${TARGETPLATFORM}" in \
         "linux/arm64")      S6_ARCH=aarch64      ;; \
         "linux/amd64")      S6_ARCH=x86_64       ;; \
