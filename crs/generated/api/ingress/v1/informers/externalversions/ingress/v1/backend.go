@@ -61,13 +61,25 @@ func NewFilteredBackendInformer(client versioned.Interface, namespace string, re
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.IngressV1().Backends(namespace).List(context.TODO(), options)
+				return client.IngressV1().Backends(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.IngressV1().Backends(namespace).Watch(context.TODO(), options)
+				return client.IngressV1().Backends(namespace).Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.IngressV1().Backends(namespace).List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.IngressV1().Backends(namespace).Watch(ctx, options)
 			},
 		},
 		&apiingressv1.Backend{},

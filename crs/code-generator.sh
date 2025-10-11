@@ -37,8 +37,7 @@ VERSION=$(go list -m  k8s.io/api  | cut -d ' ' -f2)
 GOBIN="$(go env GOBIN)"
 gopath="$(go env GOPATH)"
 gobin="${GOBIN:-$(go env GOPATH)/bin}"
-go install k8s.io/code-generator/cmd/{deepcopy-gen,client-gen,lister-gen,informer-gen,defaulter-gen}@$VERSION
-go install k8s.io/code-generator/cmd/register-gen@v0.31.5 # pin version until https://github.com/kubernetes/kubernetes/issues/129290 is fixed
+go install k8s.io/code-generator/cmd/{deepcopy-gen,client-gen,lister-gen,informer-gen,defaulter-gen,register-gen}@$VERSION
 
 # Generate Code
 IFS=','
@@ -91,7 +90,11 @@ go install sigs.k8s.io/controller-tools/cmd/controller-gen@${CONTROLLER_GEN_VERS
 echo "Controller-gen: " ${CONTROLLER_GEN_VERSION}
 controller-gen crd paths=./crs/api/ingress/v3/...  output:crd:dir=./crs/definition
 # remove code-gen annotation (dependabot fails)
-find ${CR_DIR}/definition -type f -name '*.yaml' -exec sed -i '/controller-gen.kubebuilder.io\/version/d' {} +
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    find "${CR_DIR}/definition" -type f -name '*.yaml' -exec gsed -i '/controller-gen.kubebuilder.io\/version/d' {} +
+else
+    find "${CR_DIR}/definition" -type f -name '*.yaml' -exec sed -i '/controller-gen.kubebuilder.io\/version/d' {} +
+fi
 
 
 # # Removal of some fields from the CRDs
