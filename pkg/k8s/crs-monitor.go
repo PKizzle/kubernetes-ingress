@@ -15,6 +15,7 @@
 package k8s
 
 import (
+	"context"
 	"time"
 
 	k8ssync "github.com/haproxytech/kubernetes-ingress/pkg/k8s/sync"
@@ -25,9 +26,17 @@ import (
 	apiextensionsinformers "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
 )
 
+type groupKindEvent string
+
+const (
+	groupKindAdded   groupKindEvent = "added"
+	groupKindDeleted groupKindEvent = "deleted"
+)
+
 type GroupKind struct {
 	Group string
 	Kind  string
+	Event groupKindEvent
 }
 
 func (k k8s) runCRDefinitionsInformer(eventChan chan GroupKind, stop chan struct{}) { //nolint:ireturn
@@ -41,27 +50,58 @@ func (k k8s) runCRDefinitionsInformer(eventChan chan GroupKind, stop chan struct
 	logger.Error(errW)
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			crd := obj.(*apiextensionsv1.CustomResourceDefinition)
-			if !(crd.Spec.Group == "ingress.v1.haproxy.org" || crd.Spec.Group == "ingress.v3.haproxy.org") {
+			crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+			if !ok {
 				return
 			}
-			if !(crd.Spec.Names.Kind == "Global" ||
-				crd.Spec.Names.Kind == "Defaults" ||
-				crd.Spec.Names.Kind == "Backend" ||
-				crd.Spec.Names.Kind == "TCP") {
+			groupKind, ok := groupKindIfVersionServed(crd)
+			if !ok {
 				return
 			}
-			for _, version := range crd.Spec.Versions {
-				if (version.Name == "v1" && crd.Spec.Group == "ingress.v1.haproxy.org") ||
-					(version.Name == "v3" && crd.Spec.Group == "ingress.v3.haproxy.org") {
-					time.Sleep(time.Second * 5) // a little delay is needed to let CRD API be created
-					eventChan <- GroupKind{
-						Group: crd.Spec.Group,
-						Kind:  crd.Spec.Names.Kind,
-					}
+			if k.hasActiveCRInformer(groupKind.Group, groupKind.Kind) {
+				return
+			}
+			groupKind.Event = groupKindAdded
+			scheduleGroupKindEvent(eventChan, groupKind)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			crd, ok := newObj.(*apiextensionsv1.CustomResourceDefinition)
+			if !ok {
+				return
+			}
+			if groupKind, ok := groupKindIfVersionServed(crd); ok {
+				if k.hasActiveCRInformer(groupKind.Group, groupKind.Kind) {
 					return
 				}
+				groupKind.Event = groupKindAdded
+				scheduleGroupKindEvent(eventChan, groupKind)
+				return
 			}
+			oldCRD, ok := oldObj.(*apiextensionsv1.CustomResourceDefinition)
+			if !ok {
+				oldCRD = extractCRD(oldObj)
+			}
+			groupKind, ok := groupKindIfSupported(oldCRD)
+			if !ok {
+				return
+			}
+			if !k.hasActiveCRInformer(groupKind.Group, groupKind.Kind) {
+				return
+			}
+			groupKind.Event = groupKindDeleted
+			scheduleGroupKindEvent(eventChan, groupKind)
+		},
+		DeleteFunc: func(obj interface{}) {
+			crd := extractCRD(obj)
+			groupKind, ok := groupKindIfSupported(crd)
+			if !ok {
+				return
+			}
+			if !k.hasActiveCRInformer(groupKind.Group, groupKind.Kind) {
+				return
+			}
+			groupKind.Event = groupKindDeleted
+			scheduleGroupKindEvent(eventChan, groupKind)
 		},
 	})
 
@@ -81,58 +121,167 @@ func (k k8s) RunCRSCreationMonitoring(eventChan chan k8ssync.SyncDataEvent, stop
 		for {
 			select {
 			case groupKind := <-eventCRS:
-				if groupKind.Group == "ingress.v1.haproxy.org" {
-					if _, ok := k.crsV1["ingress.v1.haproxy.org - "+groupKind.Kind]; ok {
-						// we have already created watchers for this CRD
+				switch groupKind.Event {
+				case groupKindAdded:
+					if k.hasActiveCRInformer(groupKind.Group, groupKind.Kind) {
 						continue
 					}
-				}
-				if groupKind.Group == "ingress.v3.haproxy.org" {
-					if _, ok := k.crsV3["ingress.v3.haproxy.org - "+groupKind.Kind]; ok {
-						// we have already created watchers for this CRD
+					informersSyncedEvent := &[]cache.InformerSynced{}
+					for _, namespace := range k.whiteListedNS {
+						crsV1 := map[string]CRV1{}
+						crsV3 := map[string]CRV3{}
+						switch groupKind.Group {
+						case "ingress.v1.haproxy.org":
+							switch groupKind.Kind {
+							case "Backend":
+								crsV1[groupKind.Kind] = NewBackendCRV1()
+							case "Defaults":
+								crsV1[groupKind.Kind] = NewDefaultsCRV1()
+							case "Global":
+								crsV1[groupKind.Kind] = NewGlobalCRV1()
+							case "TCP":
+								crsV1[groupKind.Kind] = NewTCPCRV1()
+							}
+							if cr, ok := crsV1[groupKind.Kind]; ok {
+								k.crsV1["ingress.v1.haproxy.org - "+groupKind.Kind] = cr
+								logger.Info("Custom resource definition created, adding CR watcher for " + cr.GetKind())
+							}
+						case "ingress.v3.haproxy.org":
+							switch groupKind.Kind {
+							case "Backend":
+								crsV3[groupKind.Kind] = NewBackendCRV3()
+							case "Defaults":
+								crsV3[groupKind.Kind] = NewDefaultsCRV3()
+							case "Global":
+								crsV3[groupKind.Kind] = NewGlobalCRV3()
+							case "TCP":
+								crsV3[groupKind.Kind] = NewTCPCRV3()
+							}
+							if cr, ok := crsV3[groupKind.Kind]; ok {
+								k.crsV3["ingress.v3.haproxy.org - "+groupKind.Kind] = cr
+								logger.Info("Custom resource definition created, adding CR watcher for " + cr.GetKind())
+							}
+						}
+
+						if len(crsV1) == 0 && len(crsV3) == 0 {
+							continue
+						}
+
+						k.runCRInformers(eventChan, stop, namespace, informersSyncedEvent, crsV1, crsV3, osArgs)
+					}
+
+					if len(*informersSyncedEvent) == 0 {
 						continue
 					}
-				}
-				informersSyncedEvent := &[]cache.InformerSynced{}
-				for _, namespace := range k.whiteListedNS {
-					crsV1 := map[string]CRV1{}
-					crsV3 := map[string]CRV3{}
-					switch groupKind.Group {
-					case "ingress.v1.haproxy.org":
-						switch groupKind.Kind {
-						case "Backend":
-							crsV1[groupKind.Kind] = NewBackendCRV1()
-						case "Defaults":
-							crsV1[groupKind.Kind] = NewDefaultsCRV1()
-						case "Global":
-							crsV1[groupKind.Kind] = NewGlobalCRV1()
-						case "TCP":
-							crsV1[groupKind.Kind] = NewTCPCRV1()
-						}
-						logger.Info("Custom resource definition created, adding CR watcher for " + crsV1[groupKind.Kind].GetKind())
-					case "ingress.v3.haproxy.org":
-						switch groupKind.Kind {
-						case "Backend":
-							crsV3[groupKind.Kind] = NewBackendCRV3()
-						case "Defaults":
-							crsV3[groupKind.Kind] = NewDefaultsCRV3()
-						case "Global":
-							crsV3[groupKind.Kind] = NewGlobalCRV3()
-						case "TCP":
-							crsV3[groupKind.Kind] = NewTCPCRV3()
-						}
-						logger.Info("Custom resource definition created, adding CR watcher for " + crsV3[groupKind.Kind].GetKind())
+
+					if !cache.WaitForCacheSync(stop, *informersSyncedEvent...) {
+						logger.Error("Caches are not populated due to an underlying error, cannot monitor new CRDs")
 					}
-
-					k.runCRInformers(eventChan, stop, namespace, informersSyncedEvent, crsV1, crsV3, osArgs)
-				}
-
-				if !cache.WaitForCacheSync(stop, *informersSyncedEvent...) {
-					logger.Error("Caches are not populated due to an underlying error, cannot monitor new CRDs")
+				case groupKindDeleted:
+					k.stopCRInformers(groupKind.Group, groupKind.Kind)
 				}
 			case <-stop:
 				return
 			}
 		}
 	}(eventCRS)
+}
+
+func scheduleGroupKindEvent(eventChan chan GroupKind, groupKind GroupKind) {
+	if groupKind.Event == groupKindAdded {
+		time.Sleep(5 * time.Second)
+	}
+	eventChan <- groupKind
+}
+
+func groupKindIfSupported(crd *apiextensionsv1.CustomResourceDefinition) (GroupKind, bool) {
+	if crd == nil {
+		return GroupKind{}, false
+	}
+	if crd.Spec.Group != "ingress.v1.haproxy.org" && crd.Spec.Group != "ingress.v3.haproxy.org" {
+		return GroupKind{}, false
+	}
+	switch crd.Spec.Names.Kind {
+	case "Backend", "Defaults", "Global", "TCP":
+		return GroupKind{Group: crd.Spec.Group, Kind: crd.Spec.Names.Kind}, true
+	default:
+		return GroupKind{}, false
+	}
+}
+
+func groupKindIfVersionServed(crd *apiextensionsv1.CustomResourceDefinition) (GroupKind, bool) {
+	groupKind, ok := groupKindIfSupported(crd)
+	if !ok {
+		return GroupKind{}, false
+	}
+	versionName := "v1"
+	if groupKind.Group == "ingress.v3.haproxy.org" {
+		versionName = "v3"
+	}
+	for _, version := range crd.Spec.Versions {
+		if version.Name == versionName && version.Served {
+			return groupKind, true
+		}
+	}
+	return GroupKind{}, false
+}
+
+func extractCRD(obj interface{}) *apiextensionsv1.CustomResourceDefinition {
+	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+	if ok {
+		return crd
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		return nil
+	}
+	crd, ok = tombstone.Obj.(*apiextensionsv1.CustomResourceDefinition)
+	if !ok {
+		return nil
+	}
+	return crd
+}
+
+func (k k8s) hasActiveCRInformer(group, kind string) bool {
+	key := crInformerKey(group, kind)
+	k.crInformerCancelsMu.Lock()
+	cancels := k.crInformerCancels[key]
+	k.crInformerCancelsMu.Unlock()
+	return len(cancels) > 0
+}
+
+func (k k8s) registerCRInformerCancel(group, kind string, cancel context.CancelFunc) {
+	key := crInformerKey(group, kind)
+	k.crInformerCancelsMu.Lock()
+	k.crInformerCancels[key] = append(k.crInformerCancels[key], cancel)
+	k.crInformerCancelsMu.Unlock()
+}
+
+func (k k8s) stopCRInformers(group, kind string) {
+	key := crInformerKey(group, kind)
+	k.crInformerCancelsMu.Lock()
+	cancels := k.crInformerCancels[key]
+	delete(k.crInformerCancels, key)
+	k.crInformerCancelsMu.Unlock()
+
+	if len(cancels) == 0 {
+		return
+	}
+
+	logger.Infof("Custom resource definition removed, stopping CR watcher for %s/%s", group, kind)
+	for _, cancel := range cancels {
+		cancel()
+	}
+
+	mapKey := group + " - " + kind
+	switch group {
+	case "ingress.v1.haproxy.org":
+		delete(k.crsV1, mapKey)
+	case "ingress.v3.haproxy.org":
+		delete(k.crsV3, mapKey)
+	}
+}
+
+func crInformerKey(group, kind string) string {
+	return group + "/" + kind
 }

@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	k8sinformers "k8s.io/client-go/informers"
@@ -86,6 +87,8 @@ type k8s struct {
 	gatewayRestClient      client.Client
 	crsV1                  map[string]CRV1
 	crsV3                  map[string]CRV3
+	crInformerCancels      map[string][]context.CancelFunc
+	crInformerCancelsMu    *sync.Mutex
 	builtInClient          *k8sclientset.Clientset
 	crClientV1             *crclientsetv1.Clientset
 	crClientV3             *crclientsetv3.Clientset
@@ -137,6 +140,8 @@ func New(osArgs utils.OSArgs, whitelist map[string]struct{}, publishSvc *utils.N
 		apiExtensionsClient:    crdclientset.NewForConfigOrDie(restconfig),
 		crsV1:                  map[string]CRV1{},
 		crsV3:                  map[string]CRV3{},
+		crInformerCancels:      map[string][]context.CancelFunc{},
+		crInformerCancelsMu:    &sync.Mutex{},
 		whiteListedNS:          getWhitelistedNS(whitelist, osArgs.ConfigMap.Namespace),
 		publishSvc:             publishSvc,
 		podNamespace:           os.Getenv("POD_NAMESPACE"),
@@ -254,7 +259,9 @@ func (k k8s) runCRInformers(eventChan chan k8ssync.SyncDataEvent, stop chan stru
 
 		for _, cr := range crsV1 {
 			informer := cr.GetInformerV1(eventChan, informerFactoryV1)
-			go informer.Run(stop)
+			ctx, cancel := newInformerContext(stop)
+			go informer.Run(ctx.Done())
+			k.registerCRInformerCancel("ingress.v1.haproxy.org", cr.GetKind(), cancel)
 			*informersSynced = append(*informersSynced, informer.HasSynced)
 		}
 	}
@@ -263,10 +270,24 @@ func (k k8s) runCRInformers(eventChan chan k8ssync.SyncDataEvent, stop chan stru
 
 		for _, cr := range crsV3 {
 			informer := cr.GetInformerV3(eventChan, informerFactoryV3, osArgs)
-			go informer.Run(stop)
+			ctx, cancel := newInformerContext(stop)
+			go informer.Run(ctx.Done())
+			k.registerCRInformerCancel("ingress.v3.haproxy.org", cr.GetKind(), cancel)
 			*informersSynced = append(*informersSynced, informer.HasSynced)
 		}
 	}
+}
+
+func newInformerContext(stop <-chan struct{}) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-stop:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
 }
 
 func (k k8s) runConfigMapInformers(eventChan chan k8ssync.SyncDataEvent, stop chan struct{}, informersSynced *[]cache.InformerSynced, configMap utils.NamespaceValue) {

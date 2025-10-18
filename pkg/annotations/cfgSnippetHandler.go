@@ -68,6 +68,15 @@ func updateConfigSnippet(api api.HAProxyClient, configmapCfgSnippetValue []strin
 		cfgSnippetvalue = append(cfgSnippetvalue, serviceCfgSnippetValue...)
 		// Then we can iterate over each config snippet coming from different origin.
 		for origin, cfgData := range cfgDataByOrigin {
+			if origin == "configmap-insertion" {
+				if len(configmapCfgSnippetValue) == 0 {
+					delete(cfgSnippet.backends[backend], origin)
+					continue
+				}
+				cfgData.updated = nil
+				cfgData.status = store.EMPTY
+				continue
+			}
 			if cfgData.disabled {
 				instance.ReloadIf(
 					cfgData.status == store.ADDED || cfgData.status == store.MODIFIED,
