@@ -91,46 +91,39 @@ func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {
 }
 
 func (q *Quic) disableQUIC(h haproxy.HAProxy) (err error) {
-    // Try to list existing binds to avoid deleting non-existent ones.
-    binds, listErr := h.FrontendBindsGet(h.FrontHTTPS)
-    if listErr != nil {
-        // If listing fails, proceed best-effort without forcing reload on failures.
-        binds = nil
-    }
+	var bindv4Present, bindv6Present bool
+	errs := utils.Errors{}
+	binds, errBindsGet := h.FrontendBindsGet(h.FrontHTTPS)
+	if errBindsGet != nil {
+		errs.Add(errBindsGet)
+		return err
+	}
 
-    has := func(name string) bool {
-        if binds == nil {
-            return true // unknown state: attempt deletion
-        }
-        for _, b := range binds {
-            if b.Name == name {
-                return true
-            }
-        }
-        return false
-    }
+	for _, bind := range binds {
+		bindv4Present = bindv4Present || bind.Name == QUIC4BIND
+		bindv6Present = bindv6Present || bind.Name == QUIC6BIND
+	}
 
-    var changed bool
-    errs := utils.Errors{}
-    if q.IPv6 && has(QUIC6BIND) {
-        if delErr := h.FrontendBindDelete(h.FrontHTTPS, QUIC6BIND); delErr != nil {
-            errs.Add(delErr)
-        } else {
-            changed = true
-        }
-    }
-    if q.IPv4 && has(QUIC4BIND) {
-        if delErr := h.FrontendBindDelete(h.FrontHTTPS, QUIC4BIND); delErr != nil {
-            errs.Add(delErr)
-        } else {
-            changed = true
-        }
-    }
+	var changed bool
+	if q.IPv6 && bindv6Present {
+		if delErr := h.FrontendBindDelete(h.FrontHTTPS, QUIC6BIND); delErr != nil {
+			errs.Add(delErr)
+		} else {
+			changed = true
+		}
+	}
+	if q.IPv4 && bindv4Present {
+		if delErr := h.FrontendBindDelete(h.FrontHTTPS, QUIC4BIND); delErr != nil {
+			errs.Add(delErr)
+		} else {
+			changed = true
+		}
+	}
 
-    if changed {
-        instance.Reload("QUIC disabled")
-    }
-    return errs.Result()
+	if changed {
+		instance.Reload("QUIC disabled")
+	}
+	return errs.Result()
 }
 
 func (q *Quic) altSvcRule(h haproxy.HAProxy) (err error) {
@@ -154,11 +147,11 @@ func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations)
 
 	// ssl-offload
 	sslOffloadEnabled := h.FrontendSSLOffloadEnabled(h.FrontHTTPS)
-    if !sslOffloadEnabled {
-        logger.Warning("QUIC requires SSL offload to be enabled")
-        logger.Error(q.disableQUIC(h))
-        return
-    }
+	if !sslOffloadEnabled {
+		logger.Warning("QUIC requires SSL offload to be enabled")
+		logger.Error(q.disableQUIC(h))
+		return
+	}
 
 	maxAge := common.GetValue("quic-alt-svc-max-age", k.ConfigMaps.Main.Annotations)
 	updatedMaxAge := maxAge != q.MaxAge

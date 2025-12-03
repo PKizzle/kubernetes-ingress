@@ -89,13 +89,10 @@ func (c *clientNative) GlobalPushLogTargets(logTargets models.LogTargets) error 
 	if err != nil {
 		return err
 	}
-	_, existing, err := configuration.GetLogTargets(cnConfiguration.GlobalParentName, parser.GlobalSectionName, c.activeTransaction)
-	if err != nil && !errors.Is(err, cnConfiguration.ErrObjectDoesNotExist) {
-		return fmt.Errorf("unable to get HAProxy's global log targets: %w", err)
-	}
-	for idx := len(existing) - 1; idx >= 0; idx-- {
-		if errDelete := configuration.DeleteLogTarget(int64(idx), cnConfiguration.GlobalParentName, parser.GlobalSectionName, c.activeTransaction, 0); errDelete != nil && !errors.Is(errDelete, cnConfiguration.ErrObjectDoesNotExist) {
-			return fmt.Errorf("unable to clear existing HAProxy global log targets: %w", errDelete)
+	for {
+		err = configuration.DeleteLogTarget(0, "global", parser.GlobalSectionName, c.activeTransaction, 0)
+		if err != nil {
+			break
 		}
 	}
 	for _, log := range logTargets {

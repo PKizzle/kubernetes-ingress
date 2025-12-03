@@ -1,12 +1,10 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 
 	parser "github.com/haproxytech/client-native/v6/config-parser"
 	"github.com/haproxytech/client-native/v6/config-parser/types"
-	cnConfiguration "github.com/haproxytech/client-native/v6/configuration"
 	"github.com/haproxytech/client-native/v6/models"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
@@ -214,48 +212,29 @@ func (c *clientNative) FrontendRuleDeleteAll(frontend string) {
 		return
 	}
 
-	logger := utils.GetLogger()
-	deleteRules := func(count int, deleteFn func(int64) error) {
-		for idx := count - 1; idx >= 0; idx-- {
-			if errDelete := deleteFn(int64(idx)); errDelete != nil {
-				if !errors.Is(errDelete, cnConfiguration.ErrObjectDoesNotExist) {
-					logger.Error(errDelete)
-				}
-				break
-			}
+	for {
+		err := configuration.DeleteHTTPRequestRule(0, string(parser.Frontends), frontend, c.activeTransaction, 0)
+		if err != nil {
+			break
 		}
 	}
-
-	if _, httpReqs, errGet := configuration.GetHTTPRequestRules(cnConfiguration.FrontendParentName, frontend, c.activeTransaction); errGet == nil {
-		deleteRules(len(httpReqs), func(idx int64) error {
-			return configuration.DeleteHTTPRequestRule(idx, cnConfiguration.FrontendParentName, frontend, c.activeTransaction, 0)
-		})
-	} else if !errors.Is(errGet, cnConfiguration.ErrObjectDoesNotExist) {
-		logger.Error(errGet)
+	for {
+		err := configuration.DeleteHTTPResponseRule(0, string(parser.Frontends), frontend, c.activeTransaction, 0)
+		if err != nil {
+			break
+		}
 	}
-
-	if _, httpResps, errGet := configuration.GetHTTPResponseRules(cnConfiguration.FrontendParentName, frontend, c.activeTransaction); errGet == nil {
-		deleteRules(len(httpResps), func(idx int64) error {
-			return configuration.DeleteHTTPResponseRule(idx, cnConfiguration.FrontendParentName, frontend, c.activeTransaction, 0)
-		})
-	} else if !errors.Is(errGet, cnConfiguration.ErrObjectDoesNotExist) {
-		logger.Error(errGet)
+	for {
+		err := configuration.DeleteTCPRequestRule(0, string(parser.Frontends), frontend, c.activeTransaction, 0)
+		if err != nil {
+			break
+		}
 	}
-
-	if _, tcpReqs, errGet := configuration.GetTCPRequestRules(cnConfiguration.FrontendParentName, frontend, c.activeTransaction); errGet == nil {
-		deleteRules(len(tcpReqs), func(idx int64) error {
-			return configuration.DeleteTCPRequestRule(idx, cnConfiguration.FrontendParentName, frontend, c.activeTransaction, 0)
-		})
-	} else if !errors.Is(errGet, cnConfiguration.ErrObjectDoesNotExist) {
-		logger.Error(errGet)
-	}
-
-	if _, afterResps, errGet := configuration.GetHTTPAfterResponseRules(cnConfiguration.FrontendParentName, frontend, c.activeTransaction); errGet == nil {
-		deleteRules(len(afterResps), func(idx int64) error {
-			return configuration.DeleteHTTPAfterResponseRule(idx, cnConfiguration.FrontendParentName, frontend, c.activeTransaction, 0)
-		})
-	} else if !errors.Is(errGet, cnConfiguration.ErrObjectDoesNotExist) {
-		logger.Error(errGet)
+	for {
+		err := configuration.DeleteHTTPAfterResponseRule(0, string(parser.Frontends), frontend, c.activeTransaction, 0)
+		if err != nil {
+			break
+		}
 	}
 	// No usage of TCPResponseRules yet.
 }
