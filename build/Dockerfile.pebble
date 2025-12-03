@@ -50,7 +50,7 @@ RUN mkdir -p /var/run/vars && \
         -ldflags "-X github.com/haproxytech/kubernetes-ingress/pkg/version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG)" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-debian:3.3-dev11
+FROM haproxytech/haproxy-debian:3.3.0
 
 ARG TARGETPLATFORM
 
@@ -62,8 +62,9 @@ RUN apt update && \
     DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y socat openssl util-linux htop tzdata curl libcap2-bin && \
     rm -rf /var/lib/apt/lists/* && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi && \
-    chgrp -R haproxy /usr/local/etc/haproxy /run /var /usr/local/sbin/haproxy_wrapper && \
-    chmod -R ug+rwx /usr/local/etc/haproxy /run /var /usr/local/sbin/haproxy_wrapper && \
+    chown -R "${S6_USER}:${S6_GROUP}" /usr/local/etc/haproxy /run /var && \
+    chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
+    chmod u+rx /usr/local/sbin/haproxy_wrapper && \
     setcap 'cap_net_bind_service=+ep' /usr/local/sbin/haproxy_wrapper && \
     chown -R haproxy:haproxy /var/lib/pebble/default && \
     chmod ugo+rwx /var/lib/pebble/default/* && \

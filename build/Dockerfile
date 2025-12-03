@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM haproxytech/haproxy-alpine-quic:3.3-dev11 AS builder-c
+FROM haproxytech/haproxy-alpine:3.3.0 AS builder-c
 RUN apk add --no-cache build-base gcc musl-dev
 WORKDIR /src
 
@@ -48,7 +48,7 @@ RUN --mount=type=cache,sharing=locked,target=/go/pkg/mod \
         -ldflags "-X github.com/haproxytech/kubernetes-ingress/pkg/version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG)" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-alpine-quic:3.3-dev11
+FROM haproxytech/haproxy-alpine-quic:3.3.0
 
 ARG TARGETPLATFORM
 
@@ -66,8 +66,9 @@ RUN apk update && \
     apk --no-cache add socat openssl util-linux htop tzdata curl libcap bash && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi /etc/haproxy/dataplaneapi.yml && \
     rm -f /usr/local/bin/dataplaneapi-v2 /usr/bin/dataplaneapi-v2 && \
-    chown -R haproxy:haproxy /usr/local/etc/haproxy /run /var /usr/local/sbin/haproxy_wrapper && \
-    chmod -R ug+rwx /usr/local/etc/haproxy /run /var /usr/local/sbin/haproxy_wrapper && \
+    chown -R "${S6_USER}:${S6_GROUP}" /usr/local/etc/haproxy /run /var && \
+    chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
+    chmod u+rx /usr/local/sbin/haproxy_wrapper && \
     setcap 'cap_net_bind_service=+ep' /usr/local/sbin/haproxy_wrapper && \
     case "${TARGETPLATFORM}" in \
         "linux/arm64")      S6_ARCH=aarch64      ;; \
