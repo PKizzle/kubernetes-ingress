@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM haproxytech/haproxy-debian:3.3.0 AS builder-c
+FROM haproxytech/haproxy-debian:3.3.1 AS builder-c
 RUN apt update && \
     DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y build-essential && \
     rm -rf /var/lib/apt/lists/*
@@ -54,11 +54,11 @@ RUN --mount=type=cache,sharing=locked,target=/go/pkg/mod \
         -ldflags "-X github.com/haproxytech/kubernetes-ingress/pkg/version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG)" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-debian-quic:3.3.0
+FROM haproxytech/haproxy-debian-quic:3.3.1
 
 ARG TARGETPLATFORM
 
-ARG S6_OVERLAY_VERSION=3.2.4.2
+ARG S6_OVERLAY_VERSION=3.2.1.0
 ENV S6_OVERLAY_VERSION $S6_OVERLAY_VERSION
 ENV S6_READ_ONLY_ROOT=1
 ENV S6_USER=haproxy
