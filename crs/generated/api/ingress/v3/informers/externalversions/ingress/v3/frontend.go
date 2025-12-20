@@ -18,13 +18,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
+	apiingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	versioned "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/clientset/versioned"
 	internalinterfaces "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/informers/externalversions/internalinterfaces"
-	v3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
+	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -35,7 +35,7 @@ import (
 // Frontends.
 type FrontendInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.FrontendLister
+	Lister() ingressv3.FrontendLister
 }
 
 type frontendInformer struct {
@@ -56,21 +56,33 @@ func NewFrontendInformer(client versioned.Interface, namespace string, resyncPer
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredFrontendInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		&cache.ListWatch{
+		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.IngressV3().Frontends(namespace).List(context.TODO(), options)
+				return client.IngressV3().Frontends(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.IngressV3().Frontends(namespace).Watch(context.TODO(), options)
+				return client.IngressV3().Frontends(namespace).Watch(context.Background(), options)
 			},
-		},
-		&ingressv3.Frontend{},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.IngressV3().Frontends(namespace).List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.IngressV3().Frontends(namespace).Watch(ctx, options)
+			},
+		}, client),
+		&apiingressv3.Frontend{},
 		resyncPeriod,
 		indexers,
 	)
@@ -81,9 +93,9 @@ func (f *frontendInformer) defaultInformer(client versioned.Interface, resyncPer
 }
 
 func (f *frontendInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&ingressv3.Frontend{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiingressv3.Frontend{}, f.defaultInformer)
 }
 
-func (f *frontendInformer) Lister() v3.FrontendLister {
-	return v3.NewFrontendLister(f.Informer().GetIndexer())
+func (f *frontendInformer) Lister() ingressv3.FrontendLister {
+	return ingressv3.NewFrontendLister(f.Informer().GetIndexer())
 }

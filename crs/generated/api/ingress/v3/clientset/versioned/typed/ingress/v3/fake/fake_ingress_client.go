@@ -36,7 +36,7 @@ func (c *FakeIngressV3) Defaults(namespace string) v3.DefaultsInterface {
 }
 
 func (c *FakeIngressV3) Frontends(namespace string) v3.FrontendInterface {
-	return &FakeFrontends{c, namespace}
+	return newFakeFrontends(c, namespace)
 }
 
 func (c *FakeIngressV3) Globals(namespace string) v3.GlobalInterface {
@@ -48,7 +48,7 @@ func (c *FakeIngressV3) TCPs(namespace string) v3.TCPInterface {
 }
 
 func (c *FakeIngressV3) ValidationRules(namespace string) v3.ValidationRulesInterface {
-	return &FakeValidationRules{c, namespace}
+	return newFakeValidationRules(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

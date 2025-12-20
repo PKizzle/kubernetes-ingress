@@ -18,13 +18,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
+	apiingressv3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	versioned "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/clientset/versioned"
 	internalinterfaces "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/informers/externalversions/internalinterfaces"
-	v3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
+	ingressv3 "github.com/haproxytech/kubernetes-ingress/crs/generated/api/ingress/v3/listers/ingress/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -35,7 +35,7 @@ import (
 // ValidationRules.
 type ValidationRulesInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.ValidationRulesLister
+	Lister() ingressv3.ValidationRulesLister
 }
 
 type validationRulesInformer struct {
@@ -56,21 +56,33 @@ func NewValidationRulesInformer(client versioned.Interface, namespace string, re
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredValidationRulesInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		&cache.ListWatch{
+		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.IngressV3().ValidationRules(namespace).List(context.TODO(), options)
+				return client.IngressV3().ValidationRules(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.IngressV3().ValidationRules(namespace).Watch(context.TODO(), options)
+				return client.IngressV3().ValidationRules(namespace).Watch(context.Background(), options)
 			},
-		},
-		&ingressv3.ValidationRules{},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.IngressV3().ValidationRules(namespace).List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.IngressV3().ValidationRules(namespace).Watch(ctx, options)
+			},
+		}, client),
+		&apiingressv3.ValidationRules{},
 		resyncPeriod,
 		indexers,
 	)
@@ -81,9 +93,9 @@ func (f *validationRulesInformer) defaultInformer(client versioned.Interface, re
 }
 
 func (f *validationRulesInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&ingressv3.ValidationRules{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiingressv3.ValidationRules{}, f.defaultInformer)
 }
 
-func (f *validationRulesInformer) Lister() v3.ValidationRulesLister {
-	return v3.NewValidationRulesLister(f.Informer().GetIndexer())
+func (f *validationRulesInformer) Lister() ingressv3.ValidationRulesLister {
+	return ingressv3.NewValidationRulesLister(f.Informer().GetIndexer())
 }
