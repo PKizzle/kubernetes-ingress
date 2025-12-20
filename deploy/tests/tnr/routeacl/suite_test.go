@@ -137,8 +137,7 @@ func (suite *UseBackendSuite) UseBackendFixture() (eventChan chan k8ssync.SyncDa
 		Namespace: ns.Name,
 		Ports: map[string]*store.PortEndpoints{
 			"https": {
-				Port:      int64(3001),
-				Addresses: map[string]struct{}{"10.244.0.9": {}},
+				Addresses: map[string]int64{"10.244.0.9": int64(3001)},
 			},
 		},
 		Status: store.ADDED,
@@ -250,8 +249,7 @@ func (suite *UseBackendSuite) NonWildcardHostFixture() (eventChan chan k8ssync.S
 		Namespace: ns.Name,
 		Ports: map[string]*store.PortEndpoints{
 			"https": {
-				Port:      int64(3001),
-				Addresses: map[string]struct{}{"10.244.0.11": {}},
+				Addresses: map[string]int64{"10.244.0.11": int64(3001)},
 			},
 		},
 		Status: store.ADDED,
@@ -356,8 +354,7 @@ func (suite *UseBackendSuite) WildcardHostFixture() (eventChan chan k8ssync.Sync
 		Namespace: ns.Name,
 		Ports: map[string]*store.PortEndpoints{
 			"https": {
-				Port:      int64(3001),
-				Addresses: map[string]struct{}{"10.244.0.10": {}},
+				Addresses: map[string]int64{"10.244.0.10": int64(3001)},
 			},
 		},
 		Status: store.ADDED,

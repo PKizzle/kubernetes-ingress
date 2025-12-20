@@ -43,9 +43,9 @@ func (h *HAProxySrv) String() string {
 }
 
 // PortEndpoints describes endpoints of a service port
+// Addresses maps endpoint address to its port number
 type PortEndpoints struct {
-	Addresses map[string]struct{}
-	Port      int64
+	Addresses map[string]int64
 }
 
 // Endpoints describes endpoints of a service

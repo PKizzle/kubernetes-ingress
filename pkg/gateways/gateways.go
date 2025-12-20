@@ -427,11 +427,11 @@ func (gm GatewayManagerImpl) addServersToRoute(route store.TCPRoute) (reload boo
 				continue
 			}
 			if port, found := endpoints.Ports[*portName]; found {
-				for address := range port.Addresses {
-					servers = append(servers, fmt.Sprintf("%s:%d", address, port.Port))
+				for address, portNum := range port.Addresses {
+					servers = append(servers, fmt.Sprintf("%s:%d", address, portNum))
 					err = gm.haproxyClient.BackendServerCreate(backendName, models.Server{
 						Address:      address,
-						Port:         &port.Port,
+						Port:         &portNum,
 						Name:         fmt.Sprintf("SRV_%d", i+1),
 						ServerParams: models.ServerParams{Maintenance: "disabled"},
 					})

@@ -210,8 +210,7 @@ func populateDefaultLocalBackendResources(k8sStore store.K8s, podNs string, defa
 			Status:    store.ADDED,
 			Ports: map[string]*store.PortEndpoints{
 				"http": {
-					Port:      int64(defaultBackendPort),
-					Addresses: map[string]struct{}{"127.0.0.1": {}},
+					Addresses: map[string]int64{"127.0.0.1": int64(defaultBackendPort)},
 				},
 			},
 		}

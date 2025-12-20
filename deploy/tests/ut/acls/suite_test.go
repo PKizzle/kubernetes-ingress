@@ -147,8 +147,7 @@ func (suite *ACLSuite) UseACLFixture() (eventChan chan k8ssync.SyncDataEvent) {
 		Namespace: ns.Name,
 		Ports: map[string]*store.PortEndpoints{
 			"https": {
-				Port:      int64(3001),
-				Addresses: map[string]struct{}{"10.244.0.9": {}},
+				Addresses: map[string]int64{"10.244.0.9": int64(3001)},
 			},
 		},
 		Status: store.ADDED,

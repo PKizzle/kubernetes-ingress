@@ -175,21 +175,28 @@ func (c *clientNative) SyncBackendSrvs(backend *store.RuntimeBackend, portUpdate
 	var disabled []*store.HAProxySrv
 	for i, srv := range haproxySrvs {
 		srv.Modified = srv.Modified || portUpdated
-		if _, ok := addresses[srv.Address]; ok {
+		if port, ok := addresses[srv.Address]; ok {
+			// Check if port changed for this address
+			if srv.Port != port {
+				haproxySrvs[i].Port = port
+				haproxySrvs[i].Modified = true
+			}
 			delete(addresses, srv.Address)
 		} else {
 			haproxySrvs[i].Address = ""
+			haproxySrvs[i].Port = 0
 			haproxySrvs[i].Modified = true
 			disabled = append(disabled, srv)
 		}
 	}
 
 	// Configure new Addresses in available HAProxySrvs
-	for newAddr := range addresses {
+	for newAddr, port := range addresses {
 		if len(disabled) == 0 {
 			break
 		}
 		disabled[0].Address = newAddr
+		disabled[0].Port = port
 		disabled[0].Modified = true
 		disabled = disabled[1:]
 		delete(addresses, newAddr)
@@ -214,12 +221,12 @@ func (c *clientNative) SyncBackendSrvs(backend *store.RuntimeBackend, portUpdate
 				State:       "maint",
 			})
 		} else {
-			logger.Tracef("[RUNTIME] [BACKEND] [SERVER] [SOCKET] backend %s: server '%s': addr '%s' changed status to %v", backend.Name, srv.Name, srv.Address, "ready")
+			logger.Tracef("[RUNTIME] [BACKEND] [SERVER] [SOCKET] backend %s: server '%s': addr '%s' port '%d' changed status to %v", backend.Name, srv.Name, srv.Address, srv.Port, "ready")
 			runtimeServerData = append(runtimeServerData, RuntimeServerData{
 				BackendName: backend.Name,
 				ServerName:  srv.Name,
 				IP:          srv.Address,
-				Port:        int(backend.Endpoints.Port),
+				Port:        int(srv.Port),
 				State:       "ready",
 			})
 		}

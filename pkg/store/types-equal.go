@@ -142,14 +142,11 @@ func (a *PortEndpoints) Equal(b *PortEndpoints) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	if a.Port != b.Port {
-		return false
-	}
 	if len(a.Addresses) != len(b.Addresses) {
 		return false
 	}
-	for addr := range a.Addresses {
-		if _, ok := b.Addresses[addr]; !ok {
+	for addr, port := range a.Addresses {
+		if bPort, ok := b.Addresses[addr]; !ok || bPort != port {
 			return false
 		}
 	}

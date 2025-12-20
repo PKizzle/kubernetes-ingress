@@ -49,7 +49,7 @@ func (s *Service) HandleHAProxySrvs(k8s store.K8s, client api.HAProxyClient) {
 	// update servers
 	for _, srvSlot := range backend.HAProxySrvs {
 		if srvSlot.Modified || s.newBackend || s.serversToEdit {
-			s.updateHAProxySrv(client, *srvSlot, backend.Endpoints.Port)
+			s.updateHAProxySrv(client, *srvSlot)
 		}
 	}
 	if backend.DynUpdateFailed {
@@ -58,7 +58,7 @@ func (s *Service) HandleHAProxySrvs(k8s store.K8s, client api.HAProxyClient) {
 	}
 }
 
-func (s *Service) updateHAProxySrv(client api.HAProxyClient, srvSlot store.HAProxySrv, port int64) {
+func (s *Service) updateHAProxySrv(client api.HAProxyClient, srvSlot store.HAProxySrv) {
 	srv := models.Server{
 		Name:         srvSlot.Name,
 		Port:         utils.PtrInt64(1),
@@ -71,7 +71,7 @@ func (s *Service) updateHAProxySrv(client api.HAProxyClient, srvSlot store.HAPro
 	// Enable Server
 	if srvSlot.Address != "" {
 		srv.Address = srvSlot.Address
-		srv.Port = &port
+		srv.Port = utils.PtrInt64(srvSlot.Port)
 		srv.Maintenance = "disabled"
 	}
 	logger.Tracef("[CONFIG] [BACKEND] [SERVER] backend %s: about to update server in configuration file :  models.Server { Name: %s, Port: %d, Address: %s, Maintenance: %s }", s.backend.Name, srv.Name, *srv.Port, srv.Address, srv.Maintenance)
@@ -150,7 +150,7 @@ func (s *Service) scaleHAProxySrvs(backend *store.RuntimeBackend) {
 		slots[j] = srv
 	}
 	instance.ReloadIf(len(backend.HAProxySrvs) < len(slots), "[CONFIG] [BACKEND] [SERVER] Server slots in backend '%s' scaled to match available endpoints", s.backend.Name)
-	backend.Endpoints.Addresses = map[string]struct{}{}
+	backend.Endpoints.Addresses = map[string]int64{}
 	backend.HAProxySrvs = slots
 }
 
@@ -192,11 +192,12 @@ func (s *Service) getExternalNameEndpoints() (endpoints *store.RuntimeBackend, e
 		return nil, fmt.Errorf("service '%s': service port '%s' not found", s.resource.Name, ingressPort)
 	}
 	endpoints = &store.RuntimeBackend{
-		Endpoints: store.PortEndpoints{Port: port},
+		Endpoints: store.PortEndpoints{Addresses: map[string]int64{s.resource.DNS: port}},
 		HAProxySrvs: []*store.HAProxySrv{
 			{
 				Name:     "SRV_1",
 				Address:  s.resource.DNS,
+				Port:     port,
 				Modified: true,
 			},
 		},
