@@ -34,7 +34,6 @@ import (
 
 var haproxyConfig = `global
 daemon
-master-worker
 pidfile /var/run/haproxy.pid
 stats socket /var/run/haproxy-runtime-api.sock level admin expose-fd listeners
 default-path config
