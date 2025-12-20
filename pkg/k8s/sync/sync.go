@@ -47,9 +47,11 @@ const (
 	CR_DEFAULTS     SyncType = "Defaults"
 	CR_BACKEND      SyncType = "Backend"
 	CR_TCP          SyncType = "TCP"
+	CR_FRONTEND     SyncType = "Frontend"
 	PUBLISH_SERVICE SyncType = "PUBLISH_SERVICE"
 	GATEWAYCLASS    SyncType = "GATEWAYCLASS"
 	GATEWAY         SyncType = "GATEWAY"
 	TCPROUTE        SyncType = "TCPROUTE"
 	REFERENCEGRANT  SyncType = "REFERENCEGRANT"
+	CUSTOM_RESOURCE SyncType = "CUSTOM_RESOURCE"
 )

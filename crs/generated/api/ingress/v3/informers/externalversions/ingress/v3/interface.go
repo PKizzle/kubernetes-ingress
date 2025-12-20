@@ -27,10 +27,14 @@ type Interface interface {
 	Backends() BackendInformer
 	// Defaults returns a DefaultsInformer.
 	Defaults() DefaultsInformer
+	// Frontends returns a FrontendInformer.
+	Frontends() FrontendInformer
 	// Globals returns a GlobalInformer.
 	Globals() GlobalInformer
 	// TCPs returns a TCPInformer.
 	TCPs() TCPInformer
+	// ValidationRules returns a ValidationRulesInformer.
+	ValidationRules() ValidationRulesInformer
 }
 
 type version struct {
@@ -54,6 +58,11 @@ func (v *version) Defaults() DefaultsInformer {
 	return &defaultsInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// Frontends returns a FrontendInformer.
+func (v *version) Frontends() FrontendInformer {
+	return &frontendInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // Globals returns a GlobalInformer.
 func (v *version) Globals() GlobalInformer {
 	return &globalInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
@@ -62,4 +71,9 @@ func (v *version) Globals() GlobalInformer {
 // TCPs returns a TCPInformer.
 func (v *version) TCPs() TCPInformer {
 	return &tCPInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ValidationRules returns a ValidationRulesInformer.
+func (v *version) ValidationRules() ValidationRulesInformer {
+	return &validationRulesInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

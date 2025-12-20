@@ -165,6 +165,9 @@ func New(osArgs utils.OSArgs, whitelist map[string]struct{}, publishSvc *utils.N
 	k.registerCoreCRV3(NewDefaultsCRV3())
 	k.registerCoreCRV3(NewBackendCRV3())
 	k.registerCoreCRV3(NewTCPCRV3())
+	if osArgs.CustomValidationRules.Name != "" {
+		k.registerCoreCRV3(NewValidationCRV3())
+	}
 
 	if len(k.crsV1) > 0 && len(k.crsV3) > 0 {
 		logger.Infof("Both CRD v1 and v3 resources have been detected. Make sure to use the CRD Converter (--input-file and --output-file) to automatically upgrade any existing v1 resources.")
@@ -447,9 +450,6 @@ func (k k8s) IsGatewayAPIInstalled(gatewayControllerName string) (installed bool
 	}
 
 	if gatewayCrd.Name == "" {
-		if gatewayControllerName != "" {
-			logger.Errorf("No gateway api is installed, please install experimental yaml version %s", GATEWAY_API_VERSION)
-		}
 		return false
 	}
 

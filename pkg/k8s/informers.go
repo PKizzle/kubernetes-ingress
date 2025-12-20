@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"errors"
+	"maps"
 	"time"
 
 	"k8s.io/client-go/informers"
@@ -55,9 +56,10 @@ func (k k8s) getNamespaceInfomer(eventChan chan k8ssync.SyncDataEvent, factory i
 					HAProxyRuntime:           make(map[string]map[string]*store.RuntimeBackend),
 					HAProxyRuntimeStandalone: make(map[string]map[string]map[string]*store.RuntimeBackend),
 					CRs: &store.CustomResources{
-						Global:   make(map[string]*models.Global),
-						Defaults: make(map[string]*models.Defaults),
-						Backends: make(map[string]*v3.BackendSpec),
+						Global:    make(map[string]*models.Global),
+						Defaults:  make(map[string]*models.Defaults),
+						Backends:  make(map[string]*v3.BackendSpec),
+						Frontends: make(map[string]*v3.FrontendSpec),
 					},
 					Gateways:        make(map[string]*store.Gateway),
 					TCPRoutes:       make(map[string]*store.TCPRoute),
@@ -84,9 +86,10 @@ func (k k8s) getNamespaceInfomer(eventChan chan k8ssync.SyncDataEvent, factory i
 					HAProxyRuntime:           make(map[string]map[string]*store.RuntimeBackend),
 					HAProxyRuntimeStandalone: make(map[string]map[string]map[string]*store.RuntimeBackend),
 					CRs: &store.CustomResources{
-						Global:   make(map[string]*models.Global),
-						Defaults: make(map[string]*models.Defaults),
-						Backends: make(map[string]*v3.BackendSpec),
+						Global:    make(map[string]*models.Global),
+						Defaults:  make(map[string]*models.Defaults),
+						Backends:  make(map[string]*v3.BackendSpec),
+						Frontends: make(map[string]*v3.FrontendSpec),
 					},
 					Gateways:        make(map[string]*store.Gateway),
 					TCPRoutes:       make(map[string]*store.TCPRoute),
@@ -379,6 +382,9 @@ func (k k8s) getConfigMapInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 					Annotations: store.CopyAnnotations(data.Data),
 					Status:      status,
 				}
+				Annotations := store.CopyAnnotations(data.ObjectMeta.Annotations)
+				maps.Copy(item.Annotations, Annotations)
+
 				logIncomingK8sEvent(logger, item, data.UID, data.ResourceVersion)
 				eventChan <- ToSyncDataEvent(item, item, data.UID, data.ResourceVersion)
 			},
@@ -416,6 +422,8 @@ func (k k8s) getConfigMapInformer(eventChan chan k8ssync.SyncDataEvent, factory 
 					Annotations: store.CopyAnnotations(data2.Data),
 					Status:      status,
 				}
+				Annotations := store.CopyAnnotations(data2.ObjectMeta.Annotations)
+				maps.Copy(item2.Annotations, Annotations)
 
 				logIncomingK8sEvent(logger, item2, data2.UID, data2.ResourceVersion)
 				eventChan <- ToSyncDataEvent(item2, item2, data2.UID, data2.ResourceVersion)
@@ -631,7 +639,7 @@ func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer c
 	_, err := informer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
-				item, err := store.ConvertToIngress(obj)
+				item, err := store.ConvertToIngress(obj, osArgs.EnableCustomAnnotationsOnIngress)
 				if err != nil {
 					logger.Errorf("%s: Invalid data from k8s api, %s", k8ssync.INGRESS, obj)
 					return
@@ -648,7 +656,7 @@ func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer c
 				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 			DeleteFunc: func(obj interface{}) {
-				item, err := store.ConvertToIngress(obj)
+				item, err := store.ConvertToIngress(obj, osArgs.EnableCustomAnnotationsOnIngress)
 				if err != nil {
 					logger.Errorf("%s: Invalid data from k8s api, %s", k8ssync.INGRESS, obj)
 					return
@@ -665,7 +673,7 @@ func (k k8s) addIngressHandlers(eventChan chan k8ssync.SyncDataEvent, informer c
 				eventChan <- ToSyncDataEvent(item, item, uid, resourceVersion)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
-				item, err := store.ConvertToIngress(newObj)
+				item, err := store.ConvertToIngress(newObj, osArgs.EnableCustomAnnotationsOnIngress)
 				if err != nil {
 					logger.Errorf("%s: Invalid data from k8s api, %s", k8ssync.INGRESS, oldObj)
 					return

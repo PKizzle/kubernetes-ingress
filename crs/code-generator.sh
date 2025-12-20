@@ -58,7 +58,7 @@ for API_PKG in $API_PKGS; do
 
     echo "Generating clientset"
     GOPATH=$gopath "${gobin}/client-gen"\
-        --plural-exceptions "Defaults:Defaults"\
+        --plural-exceptions "Defaults:Defaults,ValidationRules:ValidationRules"\
         --clientset-name "versioned"\
         --input "${API_PKG}"\
         --input-base "" \
@@ -68,14 +68,14 @@ for API_PKG in $API_PKGS; do
 
     echo "Generating listers"
     GOPATH=$gopath "${gobin}/lister-gen"\
-        --plural-exceptions "Defaults:Defaults"\
+        --plural-exceptions "Defaults:Defaults,ValidationRules:ValidationRules"\
         --output-pkg "${CR_PKG}/generated/${CR_VERSION}/listers"\
         --go-header-file "${HDR_FILE}"\
         --output-dir "${OUTPUT_DIR}/${CR_VERSION}/listers" "${API_PKG}"
 
     echo "Generating informers"
         GOPATH=$gopath "${gobin}/informer-gen"\
-            --plural-exceptions "Defaults:Defaults"\
+            --plural-exceptions "Defaults:Defaults,ValidationRules:ValidationRules"\
             --versioned-clientset-package "${CR_PKG}/generated/${CR_VERSION}/clientset/versioned"\
             --listers-package "${CR_PKG}/generated/${CR_VERSION}/listers"\
             --output-pkg "${CR_PKG}/generated/${CR_VERSION}/informers"\

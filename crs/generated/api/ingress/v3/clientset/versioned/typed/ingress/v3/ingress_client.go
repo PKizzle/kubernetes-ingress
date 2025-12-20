@@ -29,8 +29,10 @@ type IngressV3Interface interface {
 	RESTClient() rest.Interface
 	BackendsGetter
 	DefaultsGetter
+	FrontendsGetter
 	GlobalsGetter
 	TCPsGetter
+	ValidationRulesGetter
 }
 
 // IngressV3Client is used to interact with features provided by the ingress.v3.haproxy.org group.
@@ -46,12 +48,20 @@ func (c *IngressV3Client) Defaults(namespace string) DefaultsInterface {
 	return newDefaults(c, namespace)
 }
 
+func (c *IngressV3Client) Frontends(namespace string) FrontendInterface {
+	return newFrontends(c, namespace)
+}
+
 func (c *IngressV3Client) Globals(namespace string) GlobalInterface {
 	return newGlobals(c, namespace)
 }
 
 func (c *IngressV3Client) TCPs(namespace string) TCPInterface {
 	return newTCPs(c, namespace)
+}
+
+func (c *IngressV3Client) ValidationRules(namespace string) ValidationRulesInterface {
+	return newValidationRules(c, namespace)
 }
 
 // NewForConfig creates a new IngressV3Client for the given config.

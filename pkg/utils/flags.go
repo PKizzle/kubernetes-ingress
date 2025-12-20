@@ -125,4 +125,7 @@ type OSArgs struct {
 	DisableDelayedWritingOnlyIfReload bool           `long:"disable-writing-only-if-reload" description:"disable the delayed writing of files to disk only in case of haproxy reload (=write files to disk even if no reload)"`
 	CRDInputFile                      string         `long:"input-file" description:"The file path of a CRD manifest to convert"`
 	CRDOutputFile                     string         `long:"output-file" description:"The file path of the converted (to the most recent version) CRD manifest"`
+	DisableIngressStatusUpdate        bool           `long:"disable-ingress-status-update" description:"If true, disables updating the status field of Ingress resources"`
+	EnableCustomAnnotationsOnIngress  bool           `long:"enable-custom-annotations-on-ingress" description:"allow custom user annotations on ingress"`
+	CustomValidationRules             NamespaceValue `long:"custom-validation-rules" description:"custom validation rules object" default:""`
 }

@@ -1,4 +1,4 @@
-active_version: 3.0
+active_version: 3.2
 image_arguments:
   - argument: --configmap
     description: Sets the ConfigMap object that defines global settings for the ingress controller. An empty ConfigMap is deployed by default and you can see its name by calling <code>kubectl get configmaps</code>. You can either override the default ConfigMap with your own object that uses the same name, or you can set this argument to point to a different ConfigMap. See the ConfigMap Options to learn which values you can store in the ConfigMap.
@@ -420,6 +420,24 @@ image_arguments:
         - Path a to a CRD manifest where the converted v3 CRDs will be written
     example: --output-file=/home/xxx/convert/v3/global-full.yaml
     version_min: "3.2"
+  - argument: --disable-ingress-status-update
+    description: |-
+      If set, disables updating the status field of Ingress resources by the controller.
+      By default, the controller will update the status field with the LoadBalancer address.
+      This flag is useful if you want to prevent the controller from modifying Ingress status, for example when using another controller or external process to manage status updates.
+    values:
+      - Boolean flag; just declare the flag to disable status updates.
+    default: false
+    version_min: "3.0"
+    example: --disable-ingress-status-update
+  - argument: --enable-custom-annotations-on-ingress
+    description: |-
+        Enable support for custom annotations on ingress resources.
+        Use with caution when using the same annotation on multiple ingresses for same service.
+    example: --enable-custom-annotations-on-ingress
+    version_min: "3.2"
+    values:
+      - Boolean value, just need to declare the flag
 groups:
   config-snippet:
     header: |-
@@ -686,6 +704,27 @@ annotations:
     version_min: "1.8"
     example:
       - "client-strict-sni: true"
+  - title: generate-certificates-signer
+    type: string
+    group: ssl-offloading
+    dependencies: ""
+    default: ""
+    description:
+      - Specifies the Kubernetes kubernetes.io/tls type secret containing the CA certificate file used to sign automatically generated certificates.
+      - When this annotation is set, HAProxy's generate-certificates feature is automatically enabled on the HTTPS frontend bind line.
+      - This allows HAProxy to automatically generate certificates for incoming TLS connections using the provided CA for signing.
+      - The secret should contain the CA certificate and key in PEM format.
+    tip:
+      - The secret format should be namespace/secret-name or just secret-name.
+      - When this annotation is configured, the generate-certificates option is automatically added to the bind line in the HTTPS frontend when SSL offload is enabled.
+      - HAProxy will use this CA to sign certificates generated for incoming TLS connections.
+    values:
+      - Name of Kubernetes secret in format namespace/secret-name
+    applies_to:
+      - configmap
+    version_min: "3.2"
+    example:
+      - 'generate-certificates-signer: "default/ca-signing-cert"'
   - title: cors-enable
     type: bool
     group: CORS

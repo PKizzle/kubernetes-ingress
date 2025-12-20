@@ -21,6 +21,10 @@ type BackendExpansion interface{}
 
 type DefaultsExpansion interface{}
 
+type FrontendExpansion interface{}
+
 type GlobalExpansion interface{}
 
 type TCPExpansion interface{}
+
+type ValidationRulesExpansion interface{}

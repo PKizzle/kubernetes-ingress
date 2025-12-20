@@ -64,10 +64,14 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&BackendList{},
 		&Defaults{},
 		&DefaultsList{},
+		&Frontend{},
+		&FrontendList{},
 		&Global{},
 		&GlobalList{},
 		&TCP{},
 		&TCPList{},
+		&ValidationRules{},
+		&ValidationRulesList{},
 	)
 	// AddToGroupVersion allows the serialization of client types like ListOptions.
 	v1.AddToGroupVersion(scheme, SchemeGroupVersion)

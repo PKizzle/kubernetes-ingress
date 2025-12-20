@@ -156,6 +156,14 @@ func (k k8s) RunCRSCreationMonitoring(eventChan chan k8ssync.SyncDataEvent, stop
 								crsV3[groupKind.Kind] = NewGlobalCRV3()
 							case "TCP":
 								crsV3[groupKind.Kind] = NewTCPCRV3()
+							case "ValidationRules":
+								if osArgs.CustomValidationRules.Name != "" {
+									crsV3[groupKind.Kind] = NewValidationCRV3()
+								} else {
+									ok = false
+								}
+							case "Frontend":
+								crsV3[groupKind.Kind] = NewFrontendCRV3()
 							}
 							if cr, ok := crsV3[groupKind.Kind]; ok {
 								k.crsV3["ingress.v3.haproxy.org - "+groupKind.Kind] = cr
@@ -196,6 +204,14 @@ func scheduleGroupKindEvent(eventChan chan GroupKind, groupKind GroupKind) {
 
 func groupKindIfSupported(crd *apiextensionsv1.CustomResourceDefinition) (GroupKind, bool) {
 	if crd == nil {
+		return GroupKind{}, false
+	}
+	if !(crd.Spec.Names.Kind == "Global" ||
+				crd.Spec.Names.Kind == "Defaults" ||
+				crd.Spec.Names.Kind == "Backend" ||
+				crd.Spec.Names.Kind == "TCP" ||
+				crd.Spec.Names.Kind == "Frontend" ||
+				crd.Spec.Names.Kind == "ValidationRules") {
 		return GroupKind{}, false
 	}
 	if crd.Spec.Group != "ingress.v1.haproxy.org" && crd.Spec.Group != "ingress.v3.haproxy.org" {

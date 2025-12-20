@@ -33,6 +33,14 @@ type DefaultsListerExpansion interface{}
 // DefaultsNamespaceLister.
 type DefaultsNamespaceListerExpansion interface{}
 
+// FrontendListerExpansion allows custom methods to be added to
+// FrontendLister.
+type FrontendListerExpansion interface{}
+
+// FrontendNamespaceListerExpansion allows custom methods to be added to
+// FrontendNamespaceLister.
+type FrontendNamespaceListerExpansion interface{}
+
 // GlobalListerExpansion allows custom methods to be added to
 // GlobalLister.
 type GlobalListerExpansion interface{}
@@ -48,3 +56,11 @@ type TCPListerExpansion interface{}
 // TCPNamespaceListerExpansion allows custom methods to be added to
 // TCPNamespaceLister.
 type TCPNamespaceListerExpansion interface{}
+
+// ValidationRulesListerExpansion allows custom methods to be added to
+// ValidationRulesLister.
+type ValidationRulesListerExpansion interface{}
+
+// ValidationRulesNamespaceListerExpansion allows custom methods to be added to
+// ValidationRulesNamespaceLister.
+type ValidationRulesNamespaceListerExpansion interface{}
