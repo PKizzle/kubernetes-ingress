@@ -131,10 +131,11 @@ func (s *Service) scaleHAProxySrvs(backend *store.RuntimeBackend) {
 	copy(slots, backend.HAProxySrvs)
 	i := len(backend.HAProxySrvs)
 	// ... then add the new slots ...
-	for addr := range backend.Endpoints.Addresses {
+	for addr, port := range backend.Endpoints.Addresses {
 		srv := &store.HAProxySrv{
 			Name:     fmt.Sprintf("SRV_%d", i+1),
 			Address:  addr,
+			Port:     port,
 			Modified: true,
 		}
 		slots[i] = srv
