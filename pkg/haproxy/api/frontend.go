@@ -17,23 +17,6 @@ type FrontendStructured interface {
 	FrontendCreateStructured(data *models.Frontend) error
 }
 
-// func (c *clientNative) FrontendCfgSnippetSet(frontendName string, value []string) error {
-// 	configuration, err := c.nativeAPI.Configuration()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	config, err := configuration.GetParser(c.activeTransaction)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if len(value) == 0 {
-// 		err = config.Set(parser.Frontends, frontendName, "config-snippet", nil)
-// 	} else {
-// 		err = config.Set(parser.Frontends, frontendName, "config-snippet", types.StringSliceC{Value: value})
-// 	}
-// 	return err
-// }
-
 func (c *clientNative) FrontendCfgSnippetSet(frontendName string, value []string) error {
 	frontend, exists := c.frontends[frontendName]
 	if !exists {
@@ -70,15 +53,6 @@ func (c *clientNative) FrontendCfgSnippetApply() error {
 	return err
 }
 
-// func (c *clientNative) FrontendCreate(frontend models.FrontendBase) error {
-// 	configuration, err := c.nativeAPI.Configuration()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	f := &models.Frontend{FrontendBase: frontend}
-// 	return configuration.CreateFrontend(f, c.activeTransaction, 0)
-// }
-
 func (c *clientNative) FrontendCreate(frontend models.FrontendBase) error {
 	oldFrontend, ok := c.frontends[frontend.Name]
 	if !ok {
@@ -94,14 +68,6 @@ func (c *clientNative) FrontendCreate(frontend models.FrontendBase) error {
 	c.frontends[frontend.Name] = oldFrontend
 	return nil
 }
-
-// func (c *clientNative) FrontendDelete(frontendName string) error {
-// 	configuration, err := c.nativeAPI.Configuration()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return configuration.DeleteFrontend(frontendName, c.activeTransaction, 0)
-// }
 
 func (c *clientNative) FrontendDelete(frontendName string) error {
 	_, exists := c.frontends[frontendName]
@@ -127,15 +93,6 @@ func (c *clientNative) FrontendDeletePending() error {
 	return errs.Result()
 }
 
-// func (c *clientNative) FrontendsGet() (models.Frontends, error) {
-// 	configuration, err := c.nativeAPI.Configuration()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	_, frontends, err := configuration.GetFrontends(c.activeTransaction)
-// 	return frontends, err
-// }
-
 func (c *clientNative) FrontendsGet() (models.Frontends, error) {
 	frontends := models.Frontends(make([]*models.Frontend, 0, len(c.frontends)))
 
@@ -148,18 +105,6 @@ func (c *clientNative) FrontendsGet() (models.Frontends, error) {
 	return frontends, nil
 }
 
-// func (c *clientNative) FrontendGet(frontendName string) (models.Frontend, error) {
-// 	configuration, err := c.nativeAPI.Configuration()
-// 	if err != nil {
-// 		return models.Frontend{}, err
-// 	}
-// 	_, frontend, err := configuration.GetFrontend(frontendName, c.activeTransaction)
-// 	if err != nil {
-// 		return models.Frontend{}, err
-// 	}
-// 	return *frontend, err
-// }
-
 func (c *clientNative) FrontendGet(frontendName string) (models.Frontend, error) {
 	oldFrontend, ok := c.frontends[frontendName]
 	if ok {
@@ -167,15 +112,6 @@ func (c *clientNative) FrontendGet(frontendName string) (models.Frontend, error)
 	}
 	return models.Frontend{}, fmt.Errorf("frontend %s not found", frontendName)
 }
-
-// func (c *clientNative) FrontendEdit(frontend models.FrontendBase) error {
-// 	configuration, err := c.nativeAPI.Configuration()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	f := &models.Frontend{FrontendBase: frontend}
-// 	return configuration.EditFrontend(frontend.Name, f, c.activeTransaction, 0)
-// }
 
 func (c *clientNative) FrontendEdit(frontend models.FrontendBase) error {
 	oldFrontend, ok := c.frontends[frontend.Name]
@@ -253,17 +189,6 @@ func (c *clientNative) FrontendBindsGet(frontendName string) (models.Binds, erro
 		return nil, fmt.Errorf("frontend %s not found", frontendName)
 	}
 	return utils.ConvertMapIntoPointerValuesSlice(frontend.Binds), nil
-}
-
-func (c *clientNative) FrontendBindGet(frontendName string, bindName string) (*models.Bind, error) {
-	frontend, ok := c.frontends[frontendName]
-	if !ok {
-		return nil, fmt.Errorf("frontend %s not found", frontendName)
-	}
-	if bind, found := frontend.Binds[bindName]; found {
-		return bind, nil
-	}
-	return nil, fmt.Errorf("bind %s not found", bindName)
 }
 
 func (c *clientNative) FrontendBindCreate(frontendName string, bind models.Bind) error {
