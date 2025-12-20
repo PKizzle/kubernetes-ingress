@@ -33,6 +33,7 @@ const GroupName = "ingress.v3.haproxy.org"
 var GroupVersion = v1.GroupVersion{Group: GroupName, Version: "v3"}
 
 // SchemeGroupVersion is group version used to register these objects
+//
 // Deprecated: use GroupVersion instead.
 var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v3"}
 
