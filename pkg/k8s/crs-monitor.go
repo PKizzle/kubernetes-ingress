@@ -159,8 +159,6 @@ func (k k8s) RunCRSCreationMonitoring(eventChan chan k8ssync.SyncDataEvent, stop
 							case "ValidationRules":
 								if osArgs.CustomValidationRules.Name != "" {
 									crsV3[groupKind.Kind] = NewValidationCRV3()
-								} else {
-									ok = false
 								}
 							case "Frontend":
 								crsV3[groupKind.Kind] = NewFrontendCRV3()
