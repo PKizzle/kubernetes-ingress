@@ -21,6 +21,7 @@ import (
 	"github.com/haproxytech/client-native/v6/models"
 	v3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	"github.com/haproxytech/kubernetes-ingress/pkg/annotations"
+	"github.com/haproxytech/kubernetes-ingress/pkg/controller/constants"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/certs"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
@@ -224,6 +225,8 @@ func applyFrontendOverride(namespace string, fe *models.Frontend) {
 	fe.Mode = "tcp"
 	// Add a "tcp-" prefix
 	fe.Name = cfgFrontendName(namespace, *fe)
+	// Explicitly reference defaults section to to avoid mixed implicit/explicit defaults error
+	fe.From = constants.DefaultsSectionName
 	// LogFormat
 	format := strings.TrimSpace(fe.LogFormat)
 	if format != "" {

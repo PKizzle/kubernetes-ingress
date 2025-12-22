@@ -411,6 +411,10 @@ func processConfigSnippetFrontendCustom(frontend, origin string, data []string, 
 }
 
 func processConfigSnippet(backend, origin string, data []string, orderPriority int) {
+	// Initialize the backend map if it doesn't exist
+	if _, ok := cfgSnippet.backends[backend]; !ok {
+		cfgSnippet.backends[backend] = map[string]*cfgData{}
+	}
 	var exists bool
 	if _, exists = cfgSnippet.backends[backend][origin]; !exists {
 		// Prevent empty configsnippet to be inserted (with only comment)

@@ -205,11 +205,11 @@ func groupKindIfSupported(crd *apiextensionsv1.CustomResourceDefinition) (GroupK
 		return GroupKind{}, false
 	}
 	if !(crd.Spec.Names.Kind == "Global" ||
-				crd.Spec.Names.Kind == "Defaults" ||
-				crd.Spec.Names.Kind == "Backend" ||
-				crd.Spec.Names.Kind == "TCP" ||
-				crd.Spec.Names.Kind == "Frontend" ||
-				crd.Spec.Names.Kind == "ValidationRules") {
+		crd.Spec.Names.Kind == "Defaults" ||
+		crd.Spec.Names.Kind == "Backend" ||
+		crd.Spec.Names.Kind == "TCP" ||
+		crd.Spec.Names.Kind == "Frontend" ||
+		crd.Spec.Names.Kind == "ValidationRules") {
 		return GroupKind{}, false
 	}
 	if crd.Spec.Group != "ingress.v1.haproxy.org" && crd.Spec.Group != "ingress.v3.haproxy.org" {

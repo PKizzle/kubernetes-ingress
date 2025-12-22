@@ -9,7 +9,8 @@ import (
 // SetGlobal will set default values for Global section config.
 func SetGlobal(global *models.Global, logTargets *models.LogTargets, env Env) {
 	// Enforced values
-	global.MasterWorker = true
+	// Note: MasterWorker is deprecated in HAProxy 3.3 and will be removed in 3.5.
+	// Use -W or -Ws in the startup script instead.
 	global.Pidfile = env.PIDFile
 	runtimeAPIs := []*models.RuntimeAPI{}
 	if env.RuntimeSocket != "" {
@@ -35,9 +36,8 @@ func SetGlobal(global *models.Global, logTargets *models.LogTargets, env Env) {
 	if global.TuneSslOptions == nil {
 		global.TuneSslOptions = &models.TuneSslOptions{}
 	}
-	if global.TuneSslOptions.DefaultDhParam == 0 {
-		global.TuneSslOptions.DefaultDhParam = 2048
-	}
+	// Note: DefaultDhParam is not supported by AWS-LC, so we don't set a default.
+	// Users can still set it via CRD if needed for non-AWS-LC builds.
 
 	// SSL options
 	if global.SslOptions == nil {

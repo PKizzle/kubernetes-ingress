@@ -363,9 +363,6 @@ spec:
                       - path
                       type: object
                     type: array
-                  master-worker:
-                    description: master worker
-                    type: boolean
                   max_spread_checks:
                     description: max spread checks
                     format: int64
@@ -1605,8 +1602,6 @@ spec:
         x-kubernetes-validations:
         - message: spec.config.default_path is set by ingress controller internally
           rule: '!has(self.spec.config.default_path)'
-        - message: spec.config.master-worker is set by ingress controller internally
-          rule: '!has(self.spec.config.master__dash__worker)'
         - message: spec.config.pidfile is set by ingress controller internally
           rule: '!has(self.spec.config.pidfile)'
         - message: spec.config.localpeer is set by ingress controller internally

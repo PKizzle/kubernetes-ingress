@@ -69,10 +69,8 @@ func (c *HAProxyController) globalCfg() {
 	if newGlobal == nil {
 		newGlobal = &models.Global{
 			GlobalBase: models.GlobalBase{
-				// TuneSslDefaultDhParam: 2048,
-				TuneSslOptions: &models.TuneSslOptions{
-					DefaultDhParam: 2048,
-				},
+				// Note: DefaultDhParam is not supported by AWS-LC, so we don't set a default.
+				TuneSslOptions: &models.TuneSslOptions{},
 			},
 		}
 		for _, a := range c.annotations.Global(newGlobal, &newLg) {
@@ -85,10 +83,7 @@ func (c *HAProxyController) globalCfg() {
 	if newGlobal.TuneSslOptions == nil {
 		newGlobal.TuneSslOptions = &models.TuneSslOptions{}
 	}
-
-	if newGlobal.TuneSslOptions.DefaultDhParam == 0 {
-		newGlobal.TuneSslOptions.DefaultDhParam = 2048
-	}
+	// Note: DefaultDhParam is not supported by AWS-LC, so we don't set a default.
 	env.SetGlobal(newGlobal, &newLg, c.haproxy.Env)
 	diff := newGlobal.Diff(*global)
 	if len(diff) != 0 {

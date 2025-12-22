@@ -16,6 +16,7 @@ import (
 	"github.com/haproxytech/client-native/v6/runtime"
 	runtimeoptions "github.com/haproxytech/client-native/v6/runtime/options"
 
+	"github.com/haproxytech/kubernetes-ingress/pkg/controller/constants"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
@@ -356,6 +357,10 @@ func (c *clientNative) SetAuxCfgFile(auxCfgFile string) {
 }
 
 func (c *clientNative) processBackend(backend *models.Backend, configuration configuration.Configuration) error {
+	// Explicitly reference defaults section to avoid mixed implicit/explicit defaults error
+	if backend.From == "" {
+		backend.From = constants.DefaultsSectionName
+	}
 	// Try to create the backend ...
 	errCreateBackend := configuration.CreateBackend(backend, c.activeTransaction, 0)
 	if errCreateBackend != nil {

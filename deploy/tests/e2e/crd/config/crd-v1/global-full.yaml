@@ -63,7 +63,6 @@ spec:
     lua_prepend_path:
     - path: "aword"
       type: "cpath"
-    #master-worker: false # Set by Ingress Controller, Cannot change.
     max_spread_checks: 0
     maxcompcpuusage: 0
     maxcomprate: 0
