@@ -109,7 +109,7 @@ func CRDRefresh(log utils.Logger, osArgs utils.OSArgs) error {
 				log.Error(err.Error())
 			}
 
-			vNew, err = semver.NewVersion(cnNew)
+			vNew, err := semver.NewVersion(cnNew)
 			if err != nil {
 				needUpgrade = true
 				log.Error(err.Error())
