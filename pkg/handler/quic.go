@@ -163,20 +163,20 @@ func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations)
 	if err != nil || (nameSslCertificateAnn == "") {
 		logger.Error(q.disableQUIC(h))
 		return nil
-	} else {
-		namespaceSslCertificate := k.Namespaces[nsSslCertificateAnn]
-		var sslSecret *store.Secret
-		if namespaceSslCertificate != nil {
-			sslSecret = namespaceSslCertificate.Secret[nameSslCertificateAnn]
-		}
-
-		if sslSecret == nil || sslSecret.Status == store.DELETED {
-			logger.Error(q.disableQUIC(h))
-			return nil
-		} else {
-			logger.Error(q.enableQUIC(h))
-		}
 	}
+
+	namespaceSslCertificate := k.Namespaces[nsSslCertificateAnn]
+	var sslSecret *store.Secret
+	if namespaceSslCertificate != nil {
+		sslSecret = namespaceSslCertificate.Secret[nameSslCertificateAnn]
+	}
+
+	if sslSecret == nil || sslSecret.Status == store.DELETED {
+		logger.Error(q.disableQUIC(h))
+		return nil
+	}
+
+	logger.Error(q.enableQUIC(h))
 
 	return nil
 }

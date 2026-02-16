@@ -27,18 +27,15 @@ func (i *Ingress) UpdateStatus(client *kubernetes.Clientset, disableStatusUpdate
 		}
 	}
 
-	//revive:disable-next-line:unnecessary-stmt
 	var err error
-	switch i.resource.APIVersion {
-	case "networking.k8s.io/v1":
+	if i.resource.APIVersion == "networking.k8s.io/v1" {
 		var ingSource *networkingv1.Ingress
 		ingSource, err = client.NetworkingV1().Ingresses(i.resource.Namespace).Get(context.Background(), i.resource.Name, metav1.GetOptions{})
-		if err != nil {
-			break
+		if err == nil {
+			ingCopy := ingSource.DeepCopy()
+			ingCopy.Status = networkingv1.IngressStatus{LoadBalancer: networkingv1.IngressLoadBalancerStatus{Ingress: lbi}}
+			_, err = client.NetworkingV1().Ingresses(i.resource.Namespace).UpdateStatus(context.Background(), ingCopy, metav1.UpdateOptions{})
 		}
-		ingCopy := ingSource.DeepCopy()
-		ingCopy.Status = networkingv1.IngressStatus{LoadBalancer: networkingv1.IngressLoadBalancerStatus{Ingress: lbi}}
-		_, err = client.NetworkingV1().Ingresses(i.resource.Namespace).UpdateStatus(context.Background(), ingCopy, metav1.UpdateOptions{})
 	}
 
 	if k8serror.IsNotFound(err) {

@@ -132,46 +132,8 @@ func (k k8s) RunCRSCreationMonitoring(eventChan chan k8ssync.SyncDataEvent, stop
 					}
 					informersSyncedEvent := &[]cache.InformerSynced{}
 					for _, namespace := range k.whiteListedNS {
-						crsV1 := map[string]CRV1{}
-						crsV3 := map[string]CRV3{}
-						switch groupKind.Group {
-						case "ingress.v1.haproxy.org":
-							switch groupKind.Kind {
-							case "Backend":
-								crsV1[groupKind.Kind] = NewBackendCRV1()
-							case "Defaults":
-								crsV1[groupKind.Kind] = NewDefaultsCRV1()
-							case "Global":
-								crsV1[groupKind.Kind] = NewGlobalCRV1()
-							case "TCP":
-								crsV1[groupKind.Kind] = NewTCPCRV1()
-							}
-							if cr, ok := crsV1[groupKind.Kind]; ok {
-								k.crsV1["ingress.v1.haproxy.org - "+groupKind.Kind] = cr
-								logger.Info("Custom resource definition created, adding CR watcher for " + cr.GetKind())
-							}
-						case "ingress.v3.haproxy.org":
-							switch groupKind.Kind {
-							case "Backend":
-								crsV3[groupKind.Kind] = NewBackendCRV3()
-							case "Defaults":
-								crsV3[groupKind.Kind] = NewDefaultsCRV3()
-							case "Global":
-								crsV3[groupKind.Kind] = NewGlobalCRV3()
-							case "TCP":
-								crsV3[groupKind.Kind] = NewTCPCRV3()
-							case "ValidationRules":
-								if osArgs.CustomValidationRules.Name != "" {
-									crsV3[groupKind.Kind] = NewValidationCRV3()
-								}
-							case "Frontend":
-								crsV3[groupKind.Kind] = NewFrontendCRV3()
-							}
-							if cr, ok := crsV3[groupKind.Kind]; ok {
-								k.crsV3["ingress.v3.haproxy.org - "+groupKind.Kind] = cr
-								logger.Info("Custom resource definition created, adding CR watcher for " + cr.GetKind() + " " + groupKind.Group)
-							}
-						}
+						crsV1 := k.populateCRsV1(groupKind)
+						crsV3 := k.populateCRsV3(groupKind, osArgs)
 
 						if len(crsV1) == 0 && len(crsV3) == 0 {
 							continue
@@ -195,6 +157,56 @@ func (k k8s) RunCRSCreationMonitoring(eventChan chan k8ssync.SyncDataEvent, stop
 			}
 		}
 	}(eventCRS)
+}
+
+func (k k8s) populateCRsV1(groupKind GroupKind) map[string]CRV1 {
+	crsV1 := map[string]CRV1{}
+	if groupKind.Group != "ingress.v1.haproxy.org" {
+		return crsV1
+	}
+	switch groupKind.Kind {
+	case "Backend":
+		crsV1[groupKind.Kind] = NewBackendCRV1()
+	case "Defaults":
+		crsV1[groupKind.Kind] = NewDefaultsCRV1()
+	case "Global":
+		crsV1[groupKind.Kind] = NewGlobalCRV1()
+	case "TCP":
+		crsV1[groupKind.Kind] = NewTCPCRV1()
+	}
+	if cr, ok := crsV1[groupKind.Kind]; ok {
+		k.crsV1["ingress.v1.haproxy.org - "+groupKind.Kind] = cr
+		logger.Info("Custom resource definition created, adding CR watcher for " + cr.GetKind())
+	}
+	return crsV1
+}
+
+func (k k8s) populateCRsV3(groupKind GroupKind, osArgs utils.OSArgs) map[string]CRV3 {
+	crsV3 := map[string]CRV3{}
+	if groupKind.Group != "ingress.v3.haproxy.org" {
+		return crsV3
+	}
+	switch groupKind.Kind {
+	case "Backend":
+		crsV3[groupKind.Kind] = NewBackendCRV3()
+	case "Defaults":
+		crsV3[groupKind.Kind] = NewDefaultsCRV3()
+	case "Global":
+		crsV3[groupKind.Kind] = NewGlobalCRV3()
+	case "TCP":
+		crsV3[groupKind.Kind] = NewTCPCRV3()
+	case "ValidationRules":
+		if osArgs.CustomValidationRules.Name != "" {
+			crsV3[groupKind.Kind] = NewValidationCRV3()
+		}
+	case "Frontend":
+		crsV3[groupKind.Kind] = NewFrontendCRV3()
+	}
+	if cr, ok := crsV3[groupKind.Kind]; ok {
+		k.crsV3["ingress.v3.haproxy.org - "+groupKind.Kind] = cr
+		logger.Info("Custom resource definition created, adding CR watcher for " + cr.GetKind() + " " + groupKind.Group)
+	}
+	return crsV3
 }
 
 func scheduleGroupKindEvent(eventChan chan GroupKind, groupKind GroupKind, apiExtClient *crdclientset.Clientset) {
