@@ -16,6 +16,7 @@ package k8s
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	k8ssync "github.com/haproxytech/kubernetes-ingress/pkg/k8s/sync"
@@ -23,7 +24,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	crdclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apiextensionsinformers "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type groupKindEvent string
@@ -62,7 +65,7 @@ func (k k8s) runCRDefinitionsInformer(eventChan chan GroupKind, stop chan struct
 				return
 			}
 			groupKind.Event = groupKindAdded
-			scheduleGroupKindEvent(eventChan, groupKind)
+			scheduleGroupKindEvent(eventChan, groupKind, k.apiExtensionsClient)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			crd, ok := newObj.(*apiextensionsv1.CustomResourceDefinition)
@@ -74,7 +77,7 @@ func (k k8s) runCRDefinitionsInformer(eventChan chan GroupKind, stop chan struct
 					return
 				}
 				groupKind.Event = groupKindAdded
-				scheduleGroupKindEvent(eventChan, groupKind)
+				scheduleGroupKindEvent(eventChan, groupKind, k.apiExtensionsClient)
 				return
 			}
 			oldCRD, ok := oldObj.(*apiextensionsv1.CustomResourceDefinition)
@@ -89,7 +92,7 @@ func (k k8s) runCRDefinitionsInformer(eventChan chan GroupKind, stop chan struct
 				return
 			}
 			groupKind.Event = groupKindDeleted
-			scheduleGroupKindEvent(eventChan, groupKind)
+			scheduleGroupKindEvent(eventChan, groupKind, k.apiExtensionsClient)
 		},
 		DeleteFunc: func(obj interface{}) {
 			crd := extractCRD(obj)
@@ -101,7 +104,7 @@ func (k k8s) runCRDefinitionsInformer(eventChan chan GroupKind, stop chan struct
 				return
 			}
 			groupKind.Event = groupKindDeleted
-			scheduleGroupKindEvent(eventChan, groupKind)
+			scheduleGroupKindEvent(eventChan, groupKind, k.apiExtensionsClient)
 		},
 	})
 
@@ -194,11 +197,59 @@ func (k k8s) RunCRSCreationMonitoring(eventChan chan k8ssync.SyncDataEvent, stop
 	}(eventCRS)
 }
 
-func scheduleGroupKindEvent(eventChan chan GroupKind, groupKind GroupKind) {
+func scheduleGroupKindEvent(eventChan chan GroupKind, groupKind GroupKind, apiExtClient *crdclientset.Clientset) {
 	if groupKind.Event == groupKindAdded {
-		time.Sleep(5 * time.Second)
+		waitForCRDEstablished(apiExtClient, groupKind)
 	}
 	eventChan <- groupKind
+}
+
+// waitForCRDEstablished polls the CRD status conditions until the CRD is established
+// (i.e., the API server is ready to serve its resources), with a timeout.
+func waitForCRDEstablished(clientset *crdclientset.Clientset, groupKind GroupKind) {
+	crdName := crdPluralName(groupKind.Kind) + "." + groupKind.Group
+
+	timeout := time.After(30 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			logger.Warningf("Timed out waiting for CRD %s to become established", crdName)
+			return
+		case <-ticker.C:
+			crd, err := clientset.ApiextensionsV1().CustomResourceDefinitions().Get(
+				context.Background(), crdName, metav1.GetOptions{})
+			if err != nil {
+				continue
+			}
+			for _, condition := range crd.Status.Conditions {
+				if condition.Type == apiextensionsv1.Established &&
+					condition.Status == apiextensionsv1.ConditionTrue {
+					logger.Infof("CRD %s is established", crdName)
+					return
+				}
+			}
+		}
+	}
+}
+
+// crdPluralName returns the lowercase plural resource name for a CRD Kind.
+func crdPluralName(kind string) string {
+	// These kinds already use their canonical plural in CRD naming
+	knownPlurals := map[string]string{
+		"Backend":         "backends",
+		"Defaults":        "defaults",
+		"Global":          "globals",
+		"TCP":             "tcps",
+		"Frontend":        "frontends",
+		"ValidationRules": "validationrules",
+	}
+	if plural, ok := knownPlurals[kind]; ok {
+		return plural
+	}
+	return strings.ToLower(kind) + "s"
 }
 
 func groupKindIfSupported(crd *apiextensionsv1.CustomResourceDefinition) (GroupKind, bool) {
@@ -217,7 +268,7 @@ func groupKindIfSupported(crd *apiextensionsv1.CustomResourceDefinition) (GroupK
 		return GroupKind{}, false
 	}
 	switch crd.Spec.Names.Kind {
-	case "Backend", "Defaults", "Global", "TCP":
+	case "Backend", "Defaults", "Global", "TCP", "Frontend", "ValidationRules":
 		return GroupKind{Group: crd.Spec.Group, Kind: crd.Spec.Names.Kind}, true
 	default:
 		return GroupKind{}, false
