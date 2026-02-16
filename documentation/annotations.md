@@ -48,7 +48,6 @@ more info about custom annotations can be found in [annotations-custom.md](annot
 | [http-connection-mode](#http-options) | string | "http-keep-alive" |  |:large_blue_circle:|:white_circle:|:white_circle:|
 | [http-keep-alive](#http-options) | [bool](#bool) | "true" |  |:large_blue_circle:|:white_circle:|:white_circle:|
 | [http-server-close](#http-options) | [bool](#bool) | "false" |  |:large_blue_circle:|:white_circle:|:white_circle:|
-| [ingress.class](#ingress-class) | string |  |  |:white_circle:|:large_blue_circle:|:white_circle:|
 | [load-balance](#balance-algorithm) | string | "roundrobin" |  |:large_blue_circle:|:large_blue_circle:|:large_blue_circle:|
 | [log-format](#log-format) | string |  |  |:large_blue_circle:|:white_circle:|:white_circle:|
 | [log-format-tcp](#log-format) | string |  |  |:large_blue_circle:|:white_circle:|:white_circle:|
@@ -63,6 +62,7 @@ more info about custom annotations can be found in [annotations-custom.md](annot
 | [rate-limit-status-code](#rate-limit) | string | "403" |  |:large_blue_circle:|:large_blue_circle:|:white_circle:|
 | [rate-limit-requests](#rate-limit) | number |  |  |:large_blue_circle:|:large_blue_circle:|:white_circle:|
 | [rate-limit-size](#rate-limit) | string | "100k" | rate-limit |:large_blue_circle:|:large_blue_circle:|:white_circle:|
+| [rate-limit-whitelist](#rate-limit) | IPs/CIDRs or pattern file |  |  |:large_blue_circle:|:large_blue_circle:|:white_circle:|
 | [request-capture](#request-capture) | [sample expression](#sample-expression) |  |  |:large_blue_circle:|:large_blue_circle:|:white_circle:|
 | [request-capture-len](#request-capture) | number | 128 |  |:large_blue_circle:|:large_blue_circle:|:white_circle:|
 | [request-set-header](#request-set-header) | string |  |  |:large_blue_circle:|:large_blue_circle:|:white_circle:|
@@ -925,33 +925,6 @@ tls-alpn: http/1.1
 
 ***
 
-#### Ingress Class
-
-##### `ingress.class`
-
-  Identifies the ingress controller to be used. If this value is the same as the [--ingress.class](./controller.md#--ingressclass) controller arg, the ingress resource will be processed.
-
-  Available on:  `ingress`
-
-  :information_source: In kubernetes 1.18+, a new `IngressClass` resource can be referenced by Ingress objects to target an Ingress Controller. More details can be found in the [IngressClass doc entry](./ingressclass.md).
-
-  :information_source: In case both `ingress.class` annotation and `ingressClassName` are used, `ingress.class` will have precedence.
-
-Possible values:
-
-- The ingress class name
-
-Example:
-
-```yaml
-ingress.class: "haproxy"
-
-```
-
-<p align='right'><a href='#available-annotations'>:arrow_up_small: back to top</a></p>
-
-***
-
 #### Log Format
 
 ##### `log-format`
@@ -1304,6 +1277,29 @@ Example:
 
 ```yaml
 rate-limit-size: 1000000
+```
+
+##### `rate-limit-whitelist`
+
+  Defines a list of IP addresses or CIDR ranges that should be excluded from rate limiting. IPs in the whitelist will never be rate limited.
+
+  Available on:  `configmap`  `ingress`
+
+  :information_source: When both rate limiting and a whitelist are configured, only clients NOT in the whitelist will be subject to rate limiting.
+
+Possible values:
+
+- Comma-separated list of IP addresses and/or CIDR ranges (e.g., `10.0.0.0/8, 192.168.1.100`)
+- Reference to a pattern file using `patterns/` prefix (e.g., `patterns/whitelist`)
+
+Example:
+
+```yaml
+rate-limit-period: "10s"
+rate-limit-requests: 1200
+rate-limit-status-code: "429"
+rate-limit-whitelist: "10.0.0.0/8, 192.168.1.100"
+
 ```
 
 <p align='right'><a href='#available-annotations'>:arrow_up_small: back to top</a></p>

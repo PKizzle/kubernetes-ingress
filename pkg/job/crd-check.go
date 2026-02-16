@@ -91,12 +91,19 @@ func CRDRefresh(log utils.Logger, osArgs utils.OSArgs) error {
 
 		if versions[0].Name == "v3" {
 			cnInK8s, ok := existingVersion.ObjectMeta.Annotations["haproxy.org/client-native"]
-			cnNew := crd.ObjectMeta.Annotations["haproxy.org/client-native"]
+			if !ok {
+				cnInK8s, ok = existingVersion.ObjectMeta.Annotations["haproxy.org/custom-annotations"]
+			}
 
-			needUpgrade := !ok
-			var vK8s, vNew *semver.Version
-
-			vK8s, err = semver.NewVersion(cnInK8s)
+			needUpgrade := false
+			if !ok {
+				needUpgrade = true
+			}
+			cnNew, ok := crd.ObjectMeta.Annotations["haproxy.org/client-native"]
+			if !ok {
+				cnNew = crd.ObjectMeta.Annotations["haproxy.org/custom-annotations"]
+			}
+			vK8s, err := semver.NewVersion(cnInK8s)
 			if err != nil {
 				needUpgrade = true
 				log.Error(err.Error())

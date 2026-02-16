@@ -114,6 +114,7 @@ func (k k8s) runCRDefinitionsInformer(eventChan chan GroupKind, stop chan struct
 	logger.Error(err)
 }
 
+//revive:disable-next-line:cognitive-complexity
 func (k k8s) RunCRSCreationMonitoring(eventChan chan k8ssync.SyncDataEvent, stop chan struct{}, osArgs utils.OSArgs) {
 	eventCRS := make(chan GroupKind)
 	k.runCRDefinitionsInformer(eventCRS, stop)
@@ -165,7 +166,7 @@ func (k k8s) RunCRSCreationMonitoring(eventChan chan k8ssync.SyncDataEvent, stop
 							}
 							if cr, ok := crsV3[groupKind.Kind]; ok {
 								k.crsV3["ingress.v3.haproxy.org - "+groupKind.Kind] = cr
-								logger.Info("Custom resource definition created, adding CR watcher for " + cr.GetKind())
+								logger.Info("Custom resource definition created, adding CR watcher for " + cr.GetKind() + " " + groupKind.Group)
 							}
 						}
 

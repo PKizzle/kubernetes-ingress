@@ -2,7 +2,6 @@ PROJECT_PATH=${PWD}
 TARGETPLATFORM?=linux/amd64
 GOOS?=linux
 GOARCH?=amd64
-GOLANGCI_LINT_VERSION=1.64.5
 CHECK_COMMIT=5.4.0
 
 .PHONY: test
@@ -32,18 +31,13 @@ doc:
 
 .PHONY: lint
 lint:
-	cd bin;GOLANGCI_LINT_VERSION=${GOLANGCI_LINT_VERSION} sh lint-check.sh
-	bin/golangci-lint run --timeout 20m --color always --max-issues-per-linter 0 --max-same-issues 0
-
-.PHONY: lint-seq
-lint-seq:
-	cd bin;GOLANGCI_LINT_VERSION=${GOLANGCI_LINT_VERSION} sh lint-check.sh
-	go run cmd/linters/*
+	go install github.com/go-task/task/v3/cmd/task@latest
+	task lint
 
 .PHONY: check-commit
 check-commit:
-	cd bin;CHECK_COMMIT=${CHECK_COMMIT} sh check-commit.sh
-	bin/check-commit
+	CHECK_COMMIT=${CHECK_COMMIT} sh bin/check-commit.sh
+	/tmp/check-commit/v${CHECK_COMMIT}/check-commit
 
 .PHONY: yaml-lint
 yaml-lint:

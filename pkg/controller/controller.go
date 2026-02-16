@@ -79,10 +79,7 @@ func (c *HAProxyController) clientAPIClosure(fn func() error) (err error) {
 		return err
 	}
 
-	if err = c.haproxy.APICommitTransaction(); err != nil {
-		return err
-	}
-	return nil
+	return c.haproxy.APICommitTransaction()
 }
 
 // Start initializes and runs HAProxyController
@@ -202,6 +199,7 @@ func (c *HAProxyController) updateHAProxy() {
 		var msg string
 		if msg, err = c.haproxy.Service("reload"); err != nil {
 			logger.Error(err)
+			c.prometheusMetricsManager.UpdateReloadMetrics(err)
 			errLines := strings.Split(msg, "\n")
 			msg := ""
 			// Extract only lines with [ALERT] prefix to reuse functions
@@ -227,8 +225,8 @@ func (c *HAProxyController) updateHAProxy() {
 			logger.Error(c.haproxy.PopPreviousBackends())
 		} else {
 			logger.Info("HAProxy reloaded")
+			c.prometheusMetricsManager.UpdateReloadMetrics(err)
 		}
-		c.prometheusMetricsManager.UpdateReloadMetrics(err)
 	} else if c.osArgs.DisableDelayedWritingOnlyIfReload {
 		// If the osArgs flag is set, then write the files to disk even if there is no reload of haproxy
 		fs.RunDelayedFuncs()
@@ -370,6 +368,7 @@ func (c *HAProxyController) manageIngress(ing *store.Ingress) {
 	}
 }
 
+//revive:disable-next-line:cognitive-complexity
 func (c *HAProxyController) processIngressesWithMerge() {
 	for _, namespace := range c.store.Namespaces {
 		c.store.SecretsProcessed = map[string]struct{}{}

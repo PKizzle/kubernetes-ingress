@@ -39,6 +39,7 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 	crdclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/types"
 
 	errGw "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -87,6 +88,7 @@ type k8s struct {
 	gatewayRestClient      client.Client
 	crsV1                  map[string]CRV1
 	crsV3                  map[string]CRV3
+	crsRegisteredOnStart   map[string]struct{}
 	crInformerCancels      map[string][]context.CancelFunc
 	crInformerCancelsMu    *sync.Mutex
 	builtInClient          *k8sclientset.Clientset
@@ -103,6 +105,7 @@ type k8s struct {
 	initialSyncPeriod      time.Duration
 	cacheResyncPeriod      time.Duration
 	disableSvcExternalName bool // CVE-2021-25740
+	cmMain                 types.NamespacedName
 }
 
 func New(osArgs utils.OSArgs, whitelist map[string]struct{}, publishSvc *utils.NamespaceValue) K8s { //nolint:ireturn
@@ -140,6 +143,7 @@ func New(osArgs utils.OSArgs, whitelist map[string]struct{}, publishSvc *utils.N
 		apiExtensionsClient:    crdclientset.NewForConfigOrDie(restconfig),
 		crsV1:                  map[string]CRV1{},
 		crsV3:                  map[string]CRV3{},
+		crsRegisteredOnStart:   map[string]struct{}{},
 		crInformerCancels:      map[string][]context.CancelFunc{},
 		crInformerCancelsMu:    &sync.Mutex{},
 		whiteListedNS:          getWhitelistedNS(whitelist, osArgs.ConfigMap.Namespace),
@@ -153,6 +157,10 @@ func New(osArgs utils.OSArgs, whitelist map[string]struct{}, publishSvc *utils.N
 		gatewayClient:          gatewayClient,
 		gatewayRestClient:      gatewayRestClient,
 		crdClient:              crdClient,
+		cmMain: types.NamespacedName{
+			Name:      osArgs.ConfigMap.Name,
+			Namespace: osArgs.ConfigMap.Namespace,
+		},
 	}
 
 	// ingress/v1 is deprecated
@@ -229,6 +237,7 @@ func (k k8s) registerCoreCRV1(cr CRV1) {
 	for _, resource := range resources.APIResources {
 		if resource.Kind == kindName {
 			k.crsV1[groupVersion+" - "+kindName] = cr
+			k.crsRegisteredOnStart[groupVersion+" - "+kindName] = struct{}{}
 			logger.Infof("%s CR defined in API %s", kindName, resources.GroupVersion)
 			break
 		}
@@ -247,6 +256,7 @@ func (k k8s) registerCoreCRV3(cr CRV3) {
 	for _, resource := range resources.APIResources {
 		if resource.Kind == kindName {
 			k.crsV3[groupVersion+" - "+kindName] = cr
+			k.crsRegisteredOnStart[groupVersion+" - "+kindName] = struct{}{}
 			logger.Infof("%s CR defined in API %s", kindName, resources.GroupVersion)
 			break
 		}

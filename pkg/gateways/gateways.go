@@ -19,6 +19,7 @@ import (
 	"sort"
 
 	"github.com/haproxytech/client-native/v6/models"
+	"github.com/haproxytech/kubernetes-ingress/pkg/controller/constants"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/api"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
 	"github.com/haproxytech/kubernetes-ingress/pkg/k8s"
@@ -205,6 +206,7 @@ func (gm GatewayManagerImpl) manageTCPRoutes() {
 			gm.haproxyClient.BackendCreateIfNotExist(
 				models.Backend{
 					BackendBase: models.BackendBase{
+						From:          constants.DefaultsSectionName,
 						Name:          getBackendName(*tcproute),
 						Mode:          "tcp",
 						DefaultServer: &models.DefaultServer{ServerParams: models.ServerParams{Check: "enabled"}},
@@ -412,6 +414,7 @@ func (gm GatewayManagerImpl) addServersToRoute(route store.TCPRoute) (reload boo
 		}
 		if portName == nil {
 			gm.statusManager.SetRouteReasonBackendNotFound(fmt.Sprintf("backend port '%s/%s' not found", *nsBackendRef, backendRef.Name))
+			//revive:disable-next-line:line-length-limit
 			logger.Errorf("gwapi: unexisting port '%d' for backendRef '%spkg/gateways/gateways.go' number '%d' from tcp route '%s/%s'", backendRefPort, backendRef.Name, id, route.Namespace, route.Name)
 			continue
 		}
