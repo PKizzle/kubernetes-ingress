@@ -38,11 +38,6 @@ func (m *UpdateStatusManagerImpl) AddIngress(ingress *ingress.Ingress) {
 }
 
 func (m *UpdateStatusManagerImpl) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
-	errs := utils.Errors{}
-	defer func() {
-		err = errs.Result()
-	}()
-
 	ingresses := m.updateIngresses
 
 	if k.UpdateAllIngresses {
@@ -77,7 +72,9 @@ func (m *UpdateStatusManagerImpl) Update(k store.K8s, h haproxy.HAProxy, a annot
 		go func() {
 			for _, ing := range ingresses {
 				if ing != nil {
-					errs.Add(ing.UpdateStatus(m.client, m.disableIngressStatusUpdate))
+					if statusErr := ing.UpdateStatus(m.client, m.disableIngressStatusUpdate); statusErr != nil {
+						logger.Error(statusErr)
+					}
 				}
 			}
 		}()
@@ -85,5 +82,5 @@ func (m *UpdateStatusManagerImpl) Update(k store.K8s, h haproxy.HAProxy, a annot
 
 	k.UpdateAllIngresses = false
 	m.updateIngresses = nil
-	return err
+	return nil
 }
