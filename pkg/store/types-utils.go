@@ -1,16 +1,15 @@
 package store
 
 import (
+	"errors"
 	"fmt"
-
-	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
 func (gw *Gateway) IsValid() error {
 	if len(gw.Listeners) == 0 {
 		return fmt.Errorf("Gateway '%s/%s' has no listeners", gw.Namespace, gw.Name)
 	}
-	err := utils.Errors{}
+	var errs []error
 	combinations := map[string]struct{}{}
 	for _, listener := range gw.Listeners {
 		hostname := ""
@@ -19,11 +18,11 @@ func (gw *Gateway) IsValid() error {
 		}
 		key := fmt.Sprintf("%s/%d/%s", hostname, listener.Port, listener.Protocol)
 		if _, found := combinations[key]; found {
-			err.Add(fmt.Errorf("duplicate combination hostname/port/protocol '%s' in listeners from gateway '%s/%s", key, gw.Namespace, gw.Name))
+			errs = append(errs, fmt.Errorf("duplicate combination hostname/port/protocol '%s' in listeners from gateway '%s/%s", key, gw.Namespace, gw.Name))
 		}
 		combinations[key] = struct{}{}
 	}
-	return err.Result()
+	return errors.Join(errs...)
 }
 
 func (tcproutes TCPRoutes) Less(i, j int) bool {

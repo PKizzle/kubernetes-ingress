@@ -19,14 +19,14 @@ func (a *ReqSetHost) GetName() string {
 	return a.name
 }
 
-func (a *ReqSetHost) Process(k store.K8s, annotations ...map[string]string) (err error) {
+func (a *ReqSetHost) Process(k store.K8s, annotations ...map[string]string) error {
 	input := common.GetValue(a.GetName(), annotations...)
 	if input == "" {
-		return err
+		return nil
 	}
 	a.rules.Add(&rules.SetHdr{
 		HdrName:   "Host",
 		HdrFormat: input,
 	})
-	return err
+	return nil
 }

@@ -23,7 +23,6 @@ import (
 )
 
 func Reconcile(client api.LogTarget, parentType rules.ParentType, parentName string, rules models.LogTargets) error {
-	var errors utils.Errors
 	currentRules, err := client.LogTargetsGet(string(parentType), parentName)
 	if err != nil {
 		return err
@@ -41,5 +40,5 @@ func Reconcile(client api.LogTarget, parentType rules.ParentType, parentName str
 		instance.Reload("parent '%s/%s', log_target rules updated: %+v", string(parentType), parentName, utils.JSONDiff(diffRules))
 	}
 
-	return errors.Result()
+	return nil
 }

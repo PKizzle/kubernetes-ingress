@@ -32,10 +32,10 @@ func (a ReqAuthAnn) GetName() string {
 	return a.name
 }
 
-func (a ReqAuthAnn) Process(k store.K8s, annotations ...map[string]string) (err error) {
+func (a ReqAuthAnn) Process(k store.K8s, annotations ...map[string]string) error {
 	input := common.GetValue(a.GetName(), annotations...)
 	if input == "" {
-		return err
+		return nil
 	}
 
 	switch a.name {
@@ -54,25 +54,24 @@ func (a ReqAuthAnn) Process(k store.K8s, annotations ...map[string]string) (err 
 		a.parent.rules.Add(a.parent.authRule)
 	case "auth-realm":
 		if a.parent.authRule == nil {
-			return err
+			return nil
 		}
 		a.parent.authRule.AuthRealm = strings.ReplaceAll(input, " ", "-")
 	case "auth-secret":
 		if a.parent.authRule == nil {
-			return err
+			return nil
 		}
 		var secret *store.Secret
 		ns, name, errAnn := common.GetK8sPath(a.name, annotations...)
 		if errAnn != nil {
-			err = errAnn
-			return err
+			return errAnn
 		}
 		if ns == "" {
 			ns = a.parent.ingress.Namespace
 		}
 		secret, _ = k.GetSecret(ns, name)
 		if secret == nil {
-			return err
+			return nil
 		}
 		a.parent.authRule.Credentials = make(map[string][]byte)
 		for u, pwd := range secret.Data {
@@ -87,7 +86,7 @@ func (a ReqAuthAnn) Process(k store.K8s, annotations ...map[string]string) (err 
 			}
 		}
 	default:
-		err = fmt.Errorf("unknown auth-type annotation '%s'", a.name)
+		return fmt.Errorf("unknown auth-type annotation '%s'", a.name)
 	}
-	return err
+	return nil
 }

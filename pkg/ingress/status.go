@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func (i *Ingress) UpdateStatus(client *kubernetes.Clientset, disableStatusUpdate bool) (err error) {
+func (i *Ingress) UpdateStatus(client *kubernetes.Clientset, disableStatusUpdate bool) error {
 	if disableStatusUpdate {
 		logger.Tracef("Skipping update of LoadBalancer status in ingress %s/%s due to configuration", i.resource.Namespace, i.resource.Name)
 		return nil
@@ -28,6 +28,7 @@ func (i *Ingress) UpdateStatus(client *kubernetes.Clientset, disableStatusUpdate
 	}
 
 	//revive:disable-next-line:unnecessary-stmt
+	var err error
 	switch i.resource.APIVersion {
 	case "networking.k8s.io/v1":
 		var ingSource *networkingv1.Ingress

@@ -32,7 +32,7 @@ type ErrorFiles struct {
 	files files
 }
 
-func (handler *ErrorFiles) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (handler *ErrorFiles) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	handler.files.dir = h.ErrFileDir
 	if k.ConfigMaps.Errorfiles == nil {
 		return nil
@@ -51,19 +51,17 @@ func (handler *ErrorFiles) Update(k store.K8s, h haproxy.HAProxy, a annotations.
 	return h.DefaultsPushConfiguration(*defaults)
 }
 
-func (handler *ErrorFiles) writeFile(code, content string) (err error) {
+func (handler *ErrorFiles) writeFile(code, content string) error {
 	// Update file
 	if _, ok := handler.files.data[code]; !ok {
-		err = checkCode(code)
-		if err != nil {
+		if err := checkCode(code); err != nil {
 			return err
 		}
 	}
-	err = handler.files.writeFile(code, content)
-	if err != nil {
-		err = fmt.Errorf("failed writing errorfile for code '%s': %w", code, err)
+	if err := handler.files.writeFile(code, content); err != nil {
+		return fmt.Errorf("failed writing errorfile for code '%s': %w", code, err)
 	}
-	return err
+	return nil
 }
 
 func (handler *ErrorFiles) refresh() (result []*models.Errorfile) {

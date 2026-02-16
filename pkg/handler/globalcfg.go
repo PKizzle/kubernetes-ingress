@@ -27,25 +27,22 @@ import (
 
 type GlobalCfg struct{}
 
-func (handler GlobalCfg) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (handler GlobalCfg) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	global := &models.Global{}
 	logTargets := &models.LogTargets{}
 	env.SetGlobal(global, logTargets, h.Env)
-	err = h.GlobalPushConfiguration(*global)
-	if err != nil {
+	if err := h.GlobalPushConfiguration(*global); err != nil {
 		return err
 	}
-	err = h.GlobalPushLogTargets(*logTargets)
-	if err != nil {
+	if err := h.GlobalPushLogTargets(*logTargets); err != nil {
 		return err
 	}
 	defaults := &models.Defaults{}
 	env.SetDefaults(defaults)
 	defaults.Name = constants.DefaultsSectionName
-	err = h.DefaultsPushConfiguration(*defaults)
-	if err != nil {
+	if err := h.DefaultsPushConfiguration(*defaults); err != nil {
 		return err
 	}
 	instance.Reload("new global configuration applied")
-	return err
+	return nil
 }

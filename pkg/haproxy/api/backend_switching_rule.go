@@ -25,7 +25,7 @@ func (c *clientNative) BackendSwitchingRuleCreate(id int64, frontendName string,
 	return nil
 }
 
-func (c *clientNative) BackendSwitchingRuleDeleteAll(frontendName string) (err error) {
+func (c *clientNative) BackendSwitchingRuleDeleteAll(frontendName string) error {
 	frontend, ok := c.frontends[frontendName]
 	if !ok {
 		return fmt.Errorf("frontend %s not found", frontendName)

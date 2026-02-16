@@ -1,6 +1,7 @@
 package annotations
 
 import (
+	"errors"
 	"slices"
 	"strings"
 
@@ -8,12 +9,11 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/api"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
-	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
 type ConfigSnippetHandler struct{}
 
-func (h ConfigSnippetHandler) Update(k store.K8s, api haproxy.HAProxy, ann Annotations) (err error) {
+func (h ConfigSnippetHandler) Update(k store.K8s, api haproxy.HAProxy, ann Annotations) error {
 	// We get the configmap configsnippet value
 	configmapCfgSnippetValue := getConfigmapConfigSnippet(k.BackendsWithNoConfigSnippets, api)
 	// We pass the configmap config snippet value to be inserted at top of the comment section for every config snippet section
@@ -44,16 +44,17 @@ func getConfigmapConfigSnippet(backendsWithNoConfigSnippets map[string]struct{},
 	return configmapCfgSnippetValue
 }
 
-func updateConfigSnippet(api api.HAProxyClient, configmapCfgSnippetValue []string) (err error) {
-	errs := utils.Errors{}
+func updateConfigSnippet(api api.HAProxyClient, configmapCfgSnippetValue []string) error {
+	var errs []error
 	// Then we iterate over each backend
 	for backend, cfgDataByOrigin := range cfgSnippet.backends {
 		// We must remove any previous cfgSnippet insertion.
+		var err error
 		if backend != "configmap" {
 			err = api.BackendCfgSnippetSet(backend, nil)
 		}
 		if err != nil {
-			errs.Add(err)
+			errs = append(errs, err)
 			continue
 		}
 		var serviceCfgSnippetValue []string
@@ -116,7 +117,7 @@ func updateConfigSnippet(api api.HAProxyClient, configmapCfgSnippetValue []strin
 			// Then insert it.
 			err = api.BackendCfgSnippetSet(backend, cfgSnippetvalue)
 			if err != nil {
-				errs.Add(err)
+				errs = append(errs, err)
 			}
 		}
 		// When backend contains no more configsnippet just remove the corresponding map entry
@@ -124,5 +125,5 @@ func updateConfigSnippet(api api.HAProxyClient, configmapCfgSnippetValue []strin
 			delete(cfgSnippet.backends, backend)
 		}
 	}
-	return errs.Result()
+	return errors.Join(errs...)
 }

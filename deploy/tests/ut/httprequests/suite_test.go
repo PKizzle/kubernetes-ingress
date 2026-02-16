@@ -41,8 +41,8 @@ import (
 type FakeUpdateSatusManager struct{}
 
 func (m *FakeUpdateSatusManager) AddIngress(ingress *ingress.Ingress) {}
-func (m *FakeUpdateSatusManager) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
-	return err
+func (m *FakeUpdateSatusManager) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
+	return nil
 }
 
 type HTTPRequestsSuite struct {

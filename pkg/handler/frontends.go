@@ -1,13 +1,14 @@
 package handler
 
 import (
+	"errors"
+
 	"dario.cat/mergo"
 	"github.com/haproxytech/client-native/v6/models"
 	"github.com/haproxytech/kubernetes-ingress/pkg/annotations"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
-	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
 type Frontend struct {
@@ -45,14 +46,14 @@ var managedFrontends = map[string]struct{}{
 // It then checks if the frontend from the custom resource and the frontend to amend are different
 // If they are different, or if we switch from one frontend to another, it will first remove the old frontend
 // Then it will create the new frontend if it doesn't already exist, otherwise it will update the existing frontend
-func (handler *Frontend) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
-	errs := utils.Errors{}
-	errs.Add(
+func (handler *Frontend) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
+	errs := []error{
 		handler.manageFrontend(CUSTOM_RESOURCE_ANNOTATION_HTTP, k, h, &handler.crFrontendHTTP),
 		handler.manageFrontend(CUSTOM_RESOURCE_ANNOTATION_HTTPS, k, h, &handler.crFrontendHTTPS),
 		handler.manageFrontend(CUSTOM_RESOURCE_ANNOTATION_STATS, k, h, &handler.crFrontendStats),
 		h.FrontendCfgSnippetApply(),
-		h.FrontendDeletePending())
+		h.FrontendDeletePending(),
+	}
 
 	frontends, _ := h.FrontendsGet()
 
@@ -62,11 +63,11 @@ func (handler *Frontend) Update(k store.K8s, h haproxy.HAProxy, a annotations.An
 		}
 		errCreate := h.FrontendCreateStructured(frontend)
 		if errCreate != nil {
-			errs.Add(h.FrontendEditStructured(frontend.FrontendBase.Name, frontend))
+			errs = append(errs, h.FrontendEditStructured(frontend.FrontendBase.Name, frontend))
 		}
 	}
 
-	return errs.Result()
+	return errors.Join(errs...)
 }
 
 // manageFrontend handles the creation, modification, or removal of a frontend based on the frontend custom resource
@@ -78,7 +79,7 @@ func (handler *Frontend) Update(k store.K8s, h haproxy.HAProxy, a annotations.An
 func (handler *Frontend) manageFrontend(crFrontendAnnotationName string,
 	k store.K8s, h haproxy.HAProxy,
 	currentCR **models.Frontend,
-) (err error) {
+) error {
 	// Get the frontend from the custom resource
 	frontendCRFromAnnotation, _ := annotations.ModelFrontend(crFrontendAnnotationName, "", k, k.ConfigMaps.Main.Annotations)
 	// Get the frontend to amend

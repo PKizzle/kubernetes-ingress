@@ -32,7 +32,7 @@ func (c *clientNative) LogTargetCreate(id int64, parentType, parentName string, 
 	return configuration.CreateLogTarget(id, parentType, parentName, &rule, c.activeTransaction, 0)
 }
 
-func (c *clientNative) LogTargetDeleteAll(parentType, parentName string) (err error) {
+func (c *clientNative) LogTargetDeleteAll(parentType, parentName string) error {
 	if parentType == "frontend" {
 		frontend, exists := c.frontends[parentName]
 		if !exists {

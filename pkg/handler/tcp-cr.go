@@ -15,6 +15,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -37,7 +38,6 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/secret"
 	"github.com/haproxytech/kubernetes-ingress/pkg/service"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
-	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -73,8 +73,8 @@ func NewTCPCustomResource(controllerIngressClass string, allowEmptyIngressClass 
 // 	logger.Warning("Please read https://github.com/haproxytech/kubernetes-ingress/blob/master/documentation/custom-resource-tcp.md for more information")
 // }
 
-func (handler TCPCustomResource) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
-	var errs utils.Errors
+func (handler TCPCustomResource) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
+	var errs []error
 
 	for _, ns := range k.Namespaces {
 		for _, tcpCR := range ns.CRs.TCPsPerCR {
@@ -116,21 +116,21 @@ func (handler TCPCustomResource) Update(k store.K8s, h haproxy.HAProxy, a annota
 				owner := tcp.Owner()
 				errSvc := handler.checkService(ctx, tcp.TCPModel)
 				if errSvc != nil {
-					errs.Add(errSvc)
+					errs = append(errs, errSvc)
 					continue
 				}
 
 				// Frontend
 				errH := handler.reconcileFrontend(ctx, owner, tcp.TCPModel, a)
 				if errH != nil {
-					errs.Add(errH)
+					errs = append(errs, errH)
 					continue
 				}
 
 				// Additional Backends
 				errBack := handler.reconcileAdditionalBackends(ctx, tcp.TCPModel.Services, a)
 				if errBack != nil {
-					errs.Add(errBack)
+					errs = append(errs, errBack)
 					continue
 				}
 			}
@@ -138,19 +138,17 @@ func (handler TCPCustomResource) Update(k store.K8s, h haproxy.HAProxy, a annota
 	}
 	handler.clearFrontends(k, h)
 
-	return errs.Result()
+	return errors.Join(errs...)
 }
 
-func (handler TCPCustomResource) checkService(ctx tcpcontext, tcp v3.TCPModel) (err error) {
+func (handler TCPCustomResource) checkService(ctx tcpcontext, tcp v3.TCPModel) error {
 	var ok bool
 	if _, ok = ctx.k.Namespaces[ctx.namespace]; !ok {
-		err = fmt.Errorf("tcp-cr: namespace of service '%s/%s' not found", ctx.namespace, tcp.Service.Name)
-		return err
+		return fmt.Errorf("tcp-cr: namespace of service '%s/%s' not found", ctx.namespace, tcp.Service.Name)
 	}
 	_, ok = ctx.k.Namespaces[ctx.namespace].Services[tcp.Service.Name]
 	if !ok {
-		err = fmt.Errorf("tcp-cr: service '%s/%s' not found", ctx.namespace, tcp.Service.Name)
-		return err
+		return fmt.Errorf("tcp-cr: service '%s/%s' not found", ctx.namespace, tcp.Service.Name)
 	}
 	return nil
 }
@@ -333,7 +331,7 @@ func isTCPFrontendRequired(k store.K8s, configFrontendName string) bool {
 }
 
 func (handler TCPCustomResource) reconcileAdditionalBackends(ctx tcpcontext, services v3.TCPServices, a annotations.Annotations) error {
-	var errors utils.Errors
+	var errs []error
 	for _, additionalService := range services {
 		path := &store.IngressPath{
 			SvcNamespace:     ctx.namespace,
@@ -344,12 +342,12 @@ func (handler TCPCustomResource) reconcileAdditionalBackends(ctx tcpcontext, ser
 		if svc, err := service.New(ctx.k, path, nil, true, nil, ctx.k.ConfigMaps.Main.Annotations); err == nil {
 			errSvc := svc.HandleBackend(ctx.k, ctx.h, a)
 			if errSvc != nil {
-				errors.Add(errSvc)
+				errs = append(errs, errSvc)
 			}
 			svc.HandleHAProxySrvs(ctx.k, ctx.h)
 		}
 	}
-	return errors.Result()
+	return errors.Join(errs...)
 }
 
 func (handler TCPCustomResource) isSupportedIngressClass(k store.K8s, tcps *store.TCPs) bool {

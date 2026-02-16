@@ -23,7 +23,7 @@ func (c *clientNative) CaptureCreate(id int64, frontendName string, rule models.
 	return nil
 }
 
-// func (c *clientNative) CaptureDeleteAll(frontend string) (err error) {
+// func (c *clientNative) CaptureDeleteAll(frontend string) error {
 // 	configuration, err := c.nativeAPI.Configuration()
 // 	if err != nil {
 // 		return err
@@ -33,14 +33,14 @@ func (c *clientNative) CaptureCreate(id int64, frontendName string, rule models.
 // 		return err
 // 	}
 // 	for range rules {
-// 		if err = configuration.DeleteDeclareCapture(0, frontend, c.activeTransaction, 0); err != nil {
-// 			break
+// 		if err := configuration.DeleteDeclareCapture(0, frontend, c.activeTransaction, 0); err != nil {
+// 			return err
 // 		}
 // 	}
-// 	return err
+// 	return nil
 // }
 
-func (c *clientNative) CaptureDeleteAll(frontendName string) (err error) {
+func (c *clientNative) CaptureDeleteAll(frontendName string) error {
 	frontend := c.frontends[frontendName]
 	if frontend == nil {
 		return fmt.Errorf("can't delete capture for unexisting frontend %s : %w", frontendName, ErrNotFound)

@@ -18,15 +18,13 @@ func (r ReqBasicAuth) GetType() Type {
 	return REQ_AUTH
 }
 
-func (r ReqBasicAuth) Create(client api.HAProxyClient, frontend *models.Frontend, ingressACL string) (err error) {
-	var userList bool
-	userList, err = client.UserListExistsByGroup(r.AuthGroup)
+func (r ReqBasicAuth) Create(client api.HAProxyClient, frontend *models.Frontend, ingressACL string) error {
+	userList, err := client.UserListExistsByGroup(r.AuthGroup)
 	if err != nil {
 		return err
 	}
 	if !userList {
-		err = client.UserListCreateByGroup(r.AuthGroup, r.Credentials)
-		if err != nil {
+		if err = client.UserListCreateByGroup(r.AuthGroup, r.Credentials); err != nil {
 			return err
 		}
 	}
@@ -36,9 +34,5 @@ func (r ReqBasicAuth) Create(client api.HAProxyClient, frontend *models.Frontend
 		Cond:      "if",
 		CondTest:  fmt.Sprintf("!{ http_auth_group(%s) authenticated-users }", r.AuthGroup),
 	}
-	if err = client.FrontendHTTPRequestRuleCreate(0, frontend.Name, httpRule, ingressACL); err != nil {
-		return err
-	}
-
-	return err
+	return client.FrontendHTTPRequestRuleCreate(0, frontend.Name, httpRule, ingressACL)
 }

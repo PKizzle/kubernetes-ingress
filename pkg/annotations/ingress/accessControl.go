@@ -39,10 +39,10 @@ func (a *AccessControl) GetName() string {
 	return a.name
 }
 
-func (a *AccessControl) Process(k store.K8s, annotations ...map[string]string) (err error) {
+func (a *AccessControl) Process(k store.K8s, annotations ...map[string]string) error {
 	input := a.GetAnnotationValue(annotations...)
 	if input == "" {
-		return err
+		return nil
 	}
 
 	if strings.HasPrefix(input, "patterns/") {
@@ -52,7 +52,7 @@ func (a *AccessControl) Process(k store.K8s, annotations ...map[string]string) (
 			AllowList: a.allowList,
 		})
 
-		return err
+		return nil
 	}
 
 	var mapName maps.Name
@@ -77,7 +77,7 @@ func (a *AccessControl) Process(k store.K8s, annotations ...map[string]string) (
 		SrcIPsMap: maps.GetPath(mapName),
 		AllowList: a.allowList,
 	})
-	return err
+	return nil
 }
 
 // GetAnnotationValue returns the annotation value of the AccessControl. If the annotation is not defined, it returns an empty string.
@@ -85,7 +85,7 @@ func (a *AccessControl) Process(k store.K8s, annotations ...map[string]string) (
 // Deprecated: remove this function when the deprecated annotation name will not be supported anymore.
 func (a *AccessControl) GetAnnotationValue(annotations ...map[string]string) string {
 	value := common.GetValue(a.name, annotations...)
-	if value == "" { // fallback to deprecated annotation name
+	if value == "" {
 		value = common.GetValue(a.deprecatedName, annotations...)
 		if value != "" {
 			logger.Warningf("annotation %q is deprecated and will be removed in a future version. Please use %q instead.", a.deprecatedName, a.name)

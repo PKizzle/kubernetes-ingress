@@ -92,7 +92,7 @@ func (handler *HTTPS) unixSocketPath(h haproxy.HAProxy) string {
 	return path.Join(h.Env.RuntimeDir, "ssl-frontend.sock")
 }
 
-func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err error) {
+func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) error {
 	// Parsing
 	var caFile string
 	var notFound store.ErrNotFound
@@ -104,17 +104,16 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err e
 		logger.Warningf("client TLS Auth: %s", annErr)
 	}
 	if secret != nil {
+		var err error
 		caFile, err = h.Certificates.AddSecret(secret, certs.CA_CERT)
 		if err != nil {
-			err = fmt.Errorf("client TLS Auth: %w", err)
-			return err
+			return fmt.Errorf("client TLS Auth: %w", err)
 		}
 	}
 
 	binds, bindsErr := h.FrontendBindsGet(h.FrontHTTPS)
 	if bindsErr != nil {
-		err = fmt.Errorf("client TLS Auth: %w", bindsErr)
-		return err
+		return fmt.Errorf("client TLS Auth: %w", bindsErr)
 	}
 
 	var enabled bool
@@ -127,7 +126,7 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err e
 
 	// No changes
 	if binds[0].SslCafile == caFile && (caFile == "" || binds[0].Verify == verify) {
-		return err
+		return nil
 	}
 	// Removing config
 	if caFile == "" {
@@ -135,27 +134,27 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err e
 		for i := range binds {
 			binds[i].SslCafile = ""
 			binds[i].Verify = ""
-			if err = h.FrontendBindEdit(h.FrontHTTPS, *binds[i]); err != nil {
+			if err := h.FrontendBindEdit(h.FrontHTTPS, *binds[i]); err != nil {
 				return err
 			}
 		}
 		instance.Reload("removed client TLS authentication")
-		return err
+		return nil
 	}
 	// Updating config
 	logger.Info("configuring client TLS authentication")
 	for i := range binds {
 		binds[i].SslCafile = caFile
 		binds[i].Verify = verify
-		if err = h.FrontendBindEdit(h.FrontHTTPS, *binds[i]); err != nil {
+		if err := h.FrontendBindEdit(h.FrontHTTPS, *binds[i]); err != nil {
 			return err
 		}
 	}
 	instance.Reload("configured client TLS authentication")
-	return err
+	return nil
 }
 
-func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	if !handler.Enabled {
 		logger.Debug("Cannot proceed with SSL Passthrough update, HTTPS is disabled")
 		return nil
@@ -164,6 +163,7 @@ func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annot
 	// Fetch tls-alpn value for when SSL offloading is enabled
 	handler.alpn = a.String("tls-alpn", k.ConfigMaps.Main.Annotations)
 
+	var err error
 	handler.strictSNI, err = annotations.Bool("client-strict-sni", k.ConfigMaps.Main.Annotations)
 	logger.Error(err)
 
@@ -180,8 +180,7 @@ func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annot
 	if secret != nil {
 		caFile, certErr := h.Certificates.AddSecret(secret, certs.FT_CERT)
 		if certErr != nil {
-			err = fmt.Errorf("generate-certificates-signer: %w", certErr)
-			return err
+			return fmt.Errorf("generate-certificates-signer: %w", certErr)
 		}
 		handler.generateCertificatesSigner = caFile
 	}
@@ -219,7 +218,7 @@ func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annot
 	return nil
 }
 
-func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
+func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) error {
 	// Create TCP frontend for ssl-passthrough
 	frontend := models.FrontendBase{
 		Name:           h.FrontSSL,
@@ -227,7 +226,7 @@ func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
 		LogFormat:      "'%ci:%cp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs SNI: %[var(sess.sni)]'",
 		DefaultBackend: h.BackSSL,
 	}
-	err = h.FrontendCreate(frontend)
+	err := h.FrontendCreate(frontend)
 	if err != nil {
 		return err
 	}
@@ -245,9 +244,9 @@ func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
 			Mode: "tcp",
 		},
 	})
-	var errors utils.Errors
+	var errs []error
 
-	errors.Add(
+	errs = append(errs,
 		h.BackendServerCreateOrUpdate(h.BackSSL, models.Server{
 			Name:         h.FrontHTTPS,
 			Address:      "unix@" + handler.unixSocketPath(h),
@@ -257,11 +256,11 @@ func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
 			Name: "%[var(txn.sni_match),field(1,.)]",
 		}),
 		handler.toggleSSLPassthrough(true, h))
-	return errors.Result()
+	return errors.Join(errs...)
 }
 
-func (handler *HTTPS) disableSSLPassthrough(h haproxy.HAProxy) (err error) {
-	err = h.FrontendDelete(h.FrontSSL)
+func (handler *HTTPS) disableSSLPassthrough(h haproxy.HAProxy) error {
+	err := h.FrontendDelete(h.FrontSSL)
 	if err != nil {
 		return err
 	}
@@ -270,14 +269,14 @@ func (handler *HTTPS) disableSSLPassthrough(h haproxy.HAProxy) (err error) {
 	return handler.toggleSSLPassthrough(false, h)
 }
 
-func (handler *HTTPS) toggleSSLPassthrough(passthrough bool, h haproxy.HAProxy) (err error) {
+func (handler *HTTPS) toggleSSLPassthrough(passthrough bool, h haproxy.HAProxy) error {
 	handler.deleteHTTPSFrontendBinds(h)
 	bindListFunc := handler.bindList
 	if passthrough {
 		bindListFunc = handler.bindListPassthrough
 	}
 	for _, bind := range bindListFunc(h) {
-		if err = h.FrontendBindCreate(h.FrontHTTPS, bind); err != nil {
+		if err := h.FrontendBindCreate(h.FrontHTTPS, bind); err != nil {
 			return err
 		}
 	}
@@ -304,8 +303,8 @@ func (handler *HTTPS) sslPassthroughRules(k store.K8s, h haproxy.HAProxy, a anno
 		}
 		inspectTimeout = utils.PtrInt64(5000)
 	}
-	errors := utils.Errors{}
-	errors.Add(h.Rules.AddRule(h.FrontSSL, rules.ReqAcceptContent{}, false),
+	errs := []error{
+		h.Rules.AddRule(h.FrontSSL, rules.ReqAcceptContent{}, false),
 		h.Rules.AddRule(h.FrontSSL, rules.ReqInspectDelay{
 			Timeout: inspectTimeout,
 		}, false),
@@ -325,6 +324,6 @@ func (handler *HTTPS) sslPassthroughRules(k store.K8s, h haproxy.HAProxy, a anno
 			Expression: fmt.Sprintf("req_ssl_sni,regsub(^[^.]*,,),map(%s)", maps.GetPath(route.SNI)),
 			CondTest:   "!{ var(txn.sni_match) -m found }",
 		}, false),
-	)
-	return errors.Result()
+	}
+	return errors.Join(errs...)
 }

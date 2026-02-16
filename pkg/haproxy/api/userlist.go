@@ -26,7 +26,7 @@ func (c *clientNative) UserListExistsByGroup(group string) (exist bool, err erro
 	return exist, err
 }
 
-func (c *clientNative) UserListDeleteAll() (err error) {
+func (c *clientNative) UserListDeleteAll() error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func (c *clientNative) UserListDeleteAll() (err error) {
 	return nil
 }
 
-func (c *clientNative) UserListCreateByGroup(group string, userPasswordMap map[string][]byte) (err error) {
+func (c *clientNative) UserListCreateByGroup(group string, userPasswordMap map[string][]byte) error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {
 		return err
@@ -78,10 +78,8 @@ func (c *clientNative) UserListCreateByGroup(group string, userPasswordMap map[s
 		}
 		names = append(names, user.Name)
 	}
-	err = p.Insert(parser.UserList, group, "group", types.Group{
+	return p.Insert(parser.UserList, group, "group", types.Group{
 		Name:  "authenticated-users",
 		Users: names,
 	})
-
-	return err
 }

@@ -19,13 +19,13 @@ func (a *SrcIPHdr) GetName() string {
 	return a.name
 }
 
-func (a *SrcIPHdr) Process(k store.K8s, annotations ...map[string]string) (err error) {
+func (a *SrcIPHdr) Process(k store.K8s, annotations ...map[string]string) error {
 	input := common.GetValue(a.GetName(), annotations...)
 	if input == "" {
-		return err
+		return nil
 	}
 	a.rules.Add(&rules.ReqSetSrc{
 		HeaderName: input,
 	})
-	return err
+	return nil
 }

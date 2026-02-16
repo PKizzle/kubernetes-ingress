@@ -52,7 +52,7 @@ func PrometheusAuthActive() bool {
 	return prometheusUsersActive
 }
 
-func (handler PrometheusEndpoint) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (handler PrometheusEndpoint) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	if handler.PodNs == "" {
 		return nil
 	}

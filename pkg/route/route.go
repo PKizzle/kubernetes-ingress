@@ -101,7 +101,7 @@ func AddHostPathRoute(route Route, mapFiles maps.Maps) error {
 }
 
 // AddCustomRoute adds an ingress route with specific ACL via use_backend haproxy directive
-func AddCustomRoute(route Route, routeACLAnn string, api api.HAProxyClient) (err error) {
+func AddCustomRoute(route Route, routeACLAnn string, api api.HAProxyClient) error {
 	var routeCond string
 	if route.Host != "" {
 		if route.Host[0] == '*' {
@@ -127,33 +127,30 @@ func AddCustomRoute(route Route, routeACLAnn string, api api.HAProxyClient) (err
 	routeCond = fmt.Sprintf("%s { %s } ", routeCond, routeACLAnn)
 
 	for _, frontend := range []string{FrontendHTTP, FrontendHTTPS} {
-		err = api.BackendSwitchingRuleCreate(0, frontend, models.BackendSwitchingRule{
+		if err := api.BackendSwitchingRuleCreate(0, frontend, models.BackendSwitchingRule{
 			Cond:     "if",
 			CondTest: routeCond,
 			Name:     route.BackendName,
-		})
-		if err != nil {
+		}); err != nil {
 			return err
 		}
 	}
 
 	CustomRoutes = append(CustomRoutes, routeCond)
-	return err
+	return nil
 }
 
-func CustomRoutesReset(api api.HAProxyClient) (err error) {
+func CustomRoutesReset(api api.HAProxyClient) error {
 	for _, frontend := range []string{FrontendHTTP, FrontendHTTPS} {
-		err = api.BackendSwitchingRuleDeleteAll(frontend)
-		if err != nil {
-			break
+		if err := api.BackendSwitchingRuleDeleteAll(frontend); err != nil {
+			return err
 		}
-		err = api.BackendSwitchingRuleCreate(0, frontend, models.BackendSwitchingRule{
+		if err := api.BackendSwitchingRuleCreate(0, frontend, models.BackendSwitchingRule{
 			Name: "%[var(txn.path_match),field(1,.)]",
-		})
-		if err != nil {
+		}); err != nil {
 			return fmt.Errorf("unable to create main backendSwitching rule !!: %w", err)
 		}
 	}
 	CustomRoutes = make([]string, 0)
-	return err
+	return nil
 }

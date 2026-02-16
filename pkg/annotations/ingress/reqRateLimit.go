@@ -41,7 +41,7 @@ func (a ReqRateLimitAnn) GetName() string {
 	return a.name
 }
 
-func (a ReqRateLimitAnn) Process(k store.K8s, annotations ...map[string]string) (err error) {
+func (a ReqRateLimitAnn) Process(k store.K8s, annotations ...map[string]string) error {
 	input := common.GetValue(a.GetName(), annotations...)
 	if input == "" {
 		return nil
@@ -50,8 +50,10 @@ func (a ReqRateLimitAnn) Process(k store.K8s, annotations ...map[string]string) 
 	switch a.name {
 	case "rate-limit-requests":
 		// Enable Ratelimiting
-		var value int64
-		value, err = strconv.ParseInt(input, 10, 64)
+		value, err := strconv.ParseInt(input, 10, 64)
+		if err != nil {
+			return err
+		}
 		a.parent.limit = &rules.ReqRateLimit{ReqsLimit: value}
 		a.parent.track = &rules.ReqTrack{TrackKey: "src"}
 		a.parent.rules.Add(a.parent.limit)
@@ -60,8 +62,10 @@ func (a ReqRateLimitAnn) Process(k store.K8s, annotations ...map[string]string) 
 		if a.parent.limit == nil || a.parent.track == nil {
 			return errors.New("rate-limit-period requires rate-limit-requests to be set")
 		}
-		var value *int64
-		value, err = utils.ParseTime(input)
+		value, err := utils.ParseTime(input)
+		if err != nil {
+			return err
+		}
 		tableName := fmt.Sprintf("RateLimit-%d", *value)
 		a.parent.track.TablePeriod = value
 		a.parent.track.TableName = tableName
@@ -70,15 +74,19 @@ func (a ReqRateLimitAnn) Process(k store.K8s, annotations ...map[string]string) 
 		if a.parent.limit == nil || a.parent.track == nil {
 			return errors.New("rate-limit-size requires rate-limit-requests to be set")
 		}
-		var value *int64
-		value, err = utils.ParseSize(input)
+		value, err := utils.ParseSize(input)
+		if err != nil {
+			return err
+		}
 		a.parent.track.TableSize = value
 	case "rate-limit-status-code":
 		if a.parent.limit == nil || a.parent.track == nil {
 			return errors.New("rate-limit-status-code requires rate-limit-requests to be set")
 		}
-		var value int64
-		value, err = utils.ParseInt(input)
+		value, err := utils.ParseInt(input)
+		if err != nil {
+			return err
+		}
 		a.parent.limit.DenyStatusCode = value
 	case "rate-limit-whitelist":
 		if a.parent.limit == nil || a.parent.track == nil {
@@ -119,7 +127,7 @@ func (a ReqRateLimitAnn) Process(k store.K8s, annotations ...map[string]string) 
 		// Store pattern file references
 		a.parent.limit.WhitelistMaps = patterns
 	default:
-		err = fmt.Errorf("unknown rate-limit annotation '%s'", a.name)
+		return fmt.Errorf("unknown rate-limit annotation '%s'", a.name)
 	}
-	return err
+	return nil
 }

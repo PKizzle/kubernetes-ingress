@@ -68,14 +68,14 @@ type HAProxyController struct {
 
 // Wrapping a Native-Client transaction and commit it.
 // Returning an error to let panic or log it upon the scenario.
-func (c *HAProxyController) clientAPIClosure(fn func() error) (err error) {
-	if err = c.haproxy.APIStartTransaction(); err != nil {
+func (c *HAProxyController) clientAPIClosure(fn func() error) error {
+	if err := c.haproxy.APIStartTransaction(); err != nil {
 		return err
 	}
 	defer func() {
 		c.haproxy.APIDisposeTransaction()
 	}()
-	if err = fn(); err != nil {
+	if err := fn(); err != nil {
 		return err
 	}
 
@@ -281,15 +281,14 @@ func (c *HAProxyController) setToReady() {
 
 // setupHAProxyRules configures haproxy rules (set-var) required for the controller logic implementation
 func (c *HAProxyController) setupHAProxyRules() error {
-	var errs utils.Errors
-	errs.Add(
+	errs := []error{
 		// ForwardedProto rule
 		c.haproxy.AddRule(c.haproxy.FrontHTTPS, rules.SetHdr{
 			ForwardedProto: true,
 		}, false),
-	)
+	}
 	for _, frontend := range []string{c.haproxy.FrontHTTP, c.haproxy.FrontHTTPS} {
-		errs.Add(
+		errs = append(errs,
 			// txn.base var used for logging
 			c.haproxy.AddRule(frontend, rules.ReqSetVar{
 				Name:       "base",
@@ -337,7 +336,7 @@ func (c *HAProxyController) setupHAProxyRules() error {
 			}, false),
 		)
 	}
-	return errs.Result()
+	return errors.Join(errs...)
 }
 
 // clean haproxy config state

@@ -41,10 +41,10 @@ func (a HostRedirectAnn) GetName() string {
 	return a.name
 }
 
-func (a HostRedirectAnn) Process(k store.K8s, annotations ...map[string]string) (err error) {
+func (a HostRedirectAnn) Process(k store.K8s, annotations ...map[string]string) error {
 	input := common.GetValue(a.GetName(), annotations...)
 	if input == "" {
-		return err
+		return nil
 	}
 
 	switch a.name {
@@ -59,19 +59,18 @@ func (a HostRedirectAnn) Process(k store.K8s, annotations ...map[string]string) 
 			a.parent.redirect.Host = a.parent.redirect.Host[len(HTTP_PREFIX):]
 		}
 		a.parent.rules.Add(a.parent.redirect)
-		return err
+		return nil
 	case "request-redirect-code":
 		if a.parent.redirect == nil {
-			return err
+			return nil
 		}
-		var code int64
-		code, err = strconv.ParseInt(input, 10, 64)
+		code, err := strconv.ParseInt(input, 10, 64)
 		if err != nil {
 			return err
 		}
 		a.parent.redirect.RedirectCode = code
 	default:
-		err = fmt.Errorf("unknown redirect-redirect annotation '%s'", a.name)
+		return fmt.Errorf("unknown redirect-redirect annotation '%s'", a.name)
 	}
-	return err
+	return nil
 }

@@ -23,7 +23,6 @@ import (
 )
 
 func Reconcile(client api.TCPRequestRule, parentType rules.ParentType, parentName string, rules models.TCPRequestRules) error {
-	var errors utils.Errors
 	currentRules, err := client.TCPRequestRulesGet(string(parentType), parentName)
 	if err != nil {
 		return err
@@ -41,5 +40,5 @@ func Reconcile(client api.TCPRequestRule, parentType rules.ParentType, parentNam
 		instance.Reload("parent '%s/%s', tcp_request_rule rules updated: %+v", string(parentType), parentName, utils.JSONDiff(diffRules))
 	}
 
-	return errors.Result()
+	return nil
 }

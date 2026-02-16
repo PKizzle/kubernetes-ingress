@@ -15,6 +15,7 @@
 package gateway
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -235,7 +236,7 @@ func (gm GatewayManagerImpl) manageTCPRoutes() {
 
 // createAllListeners creates all TCP frontends from gateway and their bindings.
 func (gm GatewayManagerImpl) createAllListeners(gateway store.Gateway) error {
-	var errs utils.Errors
+	var errs []error
 MAIN_LOOP:
 	for _, listener := range gateway.Listeners {
 		gm.statusManager.PrepareListenerStatus(listener)
@@ -265,7 +266,7 @@ MAIN_LOOP:
 			Tcplog: true,
 		})
 		if errFrontendCreate != nil {
-			errs.Add(errFrontendCreate)
+			errs = append(errs, errFrontendCreate)
 			continue
 		}
 		gm.frontends[frontendName] = struct{}{}
@@ -283,7 +284,7 @@ MAIN_LOOP:
 					BindParams: models.BindParams{Name: "v4"},
 				})
 			if errBinCreate != nil {
-				errs.Add(errBinCreate)
+				errs = append(errs, errBinCreate)
 				continue
 			}
 		}
@@ -300,12 +301,12 @@ MAIN_LOOP:
 					BindParams: models.BindParams{Name: "v6"},
 				})
 			if errBinCreate != nil {
-				errs.Add(errBinCreate)
+				errs = append(errs, errBinCreate)
 				continue
 			}
 		}
 	}
-	return errs.Result()
+	return errors.Join(errs...)
 }
 
 // isBackendRefValid valids the backendRef according internal state validation rules.
@@ -451,7 +452,7 @@ func (gm GatewayManagerImpl) addServersToRoute(route store.TCPRoute) (reload boo
 
 // getOurListenersFromTCPRoute computes the list of listeners the tcproute can be attached to according matching and authorizations rules.
 func (gm GatewayManagerImpl) getOurListenersFromTCPRoute(tcproute store.TCPRoute) ([]store.Listener, error) {
-	var errors utils.Errors
+	var errs []error
 	listeners := []store.Listener{}
 	// Iterates over parentRefs  which must be a gateway
 	for i, parentRef := range tcproute.ParentRefs {
@@ -461,12 +462,12 @@ func (gm GatewayManagerImpl) getOurListenersFromTCPRoute(tcproute store.TCPRoute
 		}
 		ns, found := gm.k8sStore.Namespaces[gatewayNs]
 		if !found {
-			errors.Add(fmt.Errorf("gwapi: unexisting namespace '%s' in parentRef number '%d' from tcp route '%s/%s'", gatewayNs, i, tcproute.Namespace, tcproute.Name))
+			errs = append(errs, fmt.Errorf("gwapi: unexisting namespace '%s' in parentRef number '%d' from tcp route '%s/%s'", gatewayNs, i, tcproute.Namespace, tcproute.Name))
 			continue
 		}
 		gw, found := ns.Gateways[parentRef.Name]
 		if !found || gw == nil {
-			errors.Add(fmt.Errorf("gwapi: unexisting gateway in parentRef '%s' from tcp route '%s/%s'", parentRef.Name, tcproute.Namespace, tcproute.Name))
+			errs = append(errs, fmt.Errorf("gwapi: unexisting gateway in parentRef '%s' from tcp route '%s/%s'", parentRef.Name, tcproute.Namespace, tcproute.Name))
 			continue
 		}
 		if !gm.isGatewayManaged(*gw) || gw.Status == store.DELETED {
@@ -495,7 +496,7 @@ func (gm GatewayManagerImpl) getOurListenersFromTCPRoute(tcproute store.TCPRoute
 			}
 		}
 	}
-	return listeners, errors.Result()
+	return listeners, errors.Join(errs...)
 }
 
 // addRouteToListener attaches the route to the frontend.

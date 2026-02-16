@@ -140,9 +140,8 @@ func (s *Service) GetBackendName() (name string, err error) {
 }
 
 // HandleBackend processes a Service and creates/updates corresponding backend configuration in HAProxy
-func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a annotations.Annotations) (err error) {
-	var newBackend *v3.BackendSpec
-	newBackend, err = s.getBackendModel(storeK8s, a, client)
+func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a annotations.Annotations) error {
+	newBackend, err := s.getBackendModel(storeK8s, a, client)
 	if err != nil {
 		s.backend = nil
 		return err
@@ -172,7 +171,7 @@ func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a 
 		})
 	backendCfgSnippetHandler.SetService(s.resource)
 	logger.Error(backendCfgSnippetHandler.Process(storeK8s, s.annotations...))
-	return err
+	return nil
 }
 
 func isServersToEdit(oldBackend models.Backend, newBackend models.Backend) bool {
@@ -251,13 +250,11 @@ func (s *Service) getBackendModel(store store.K8s, a annotations.Annotations, cl
 }
 
 // SetDefaultBackend configures the default service in kubernetes ingress resource as haproxy default backend of the frontends in params.
-func (s *Service) SetDefaultBackend(k store.K8s, h haproxy.HAProxy, frontends []string, a annotations.Annotations) (err error) {
+func (s *Service) SetDefaultBackend(k store.K8s, h haproxy.HAProxy, frontends []string, a annotations.Annotations) error {
 	if !s.path.IsDefaultBackend {
-		err = fmt.Errorf("service '%s/%s' is not marked as default backend", s.resource.Namespace, s.resource.Name)
-		return err
+		return fmt.Errorf("service '%s/%s' is not marked as default backend", s.resource.Namespace, s.resource.Name)
 	}
-	var frontend models.Frontend
-	frontend, err = h.FrontendGet(frontends[0])
+	frontend, err := h.FrontendGet(frontends[0])
 	if err != nil {
 		return err
 	}
@@ -268,8 +265,7 @@ func (s *Service) SetDefaultBackend(k store.K8s, h haproxy.HAProxy, frontends []
 	if s.path.SvcPortInt == 0 && s.path.SvcPortString == "" {
 		s.path.SvcPortString = s.resource.Ports[0].Name
 	}
-	err = s.HandleBackend(k, h, a)
-	if err != nil {
+	if err = s.HandleBackend(k, h, a); err != nil {
 		return err
 	}
 	backendName, _ := s.GetBackendName()

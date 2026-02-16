@@ -23,7 +23,6 @@ import (
 )
 
 func Reconcile(client api.Filter, parentType rules.ParentType, parentName string, rules models.Filters) error {
-	var errors utils.Errors
 	currentRules, err := client.FiltersGet(string(parentType), parentName)
 	if err != nil {
 		return err
@@ -41,5 +40,5 @@ func Reconcile(client api.Filter, parentType rules.ParentType, parentName string
 		instance.Reload("parent '%s/%s', filter rules updated: %+v", string(parentType), parentName, utils.JSONDiff(diffRules))
 	}
 
-	return errors.Result()
+	return nil
 }

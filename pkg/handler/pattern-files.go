@@ -31,22 +31,20 @@ type PatternFiles struct {
 	files files
 }
 
-func (handler *PatternFiles) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (handler *PatternFiles) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	handler.files.dir = h.Env.PatternDir
 	if k.ConfigMaps.PatternFiles == nil {
 		return nil
 	}
 	for name, v := range k.ConfigMaps.PatternFiles.Annotations {
-		err = handler.files.writeFile(name, v)
-		if err != nil {
+		if err := handler.files.writeFile(name, v); err != nil {
 			logger.Errorf("failed writing patternfile '%s': %s", name, err)
 		}
 	}
 
 	for name, f := range handler.files.data {
 		if !f.inUse {
-			err = handler.files.deleteFile(name)
-			if err != nil {
+			if err := handler.files.deleteFile(name); err != nil {
 				logger.Errorf("failed deleting patternfile '%s': %s", name, err)
 			}
 			continue

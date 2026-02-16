@@ -31,7 +31,7 @@ func (c *clientNative) TCPRequestRuleCreate(id int64, parentType, parentName str
 	return configuration.CreateTCPRequestRule(id, parentType, parentName, &rule, c.activeTransaction, 0)
 }
 
-func (c *clientNative) TCPRequestRuleDeleteAll(parentType, parentName string) (err error) {
+func (c *clientNative) TCPRequestRuleDeleteAll(parentType, parentName string) error {
 	if parentType == "frontend" {
 		frontend, exists := c.frontends[parentName]
 		if !exists {

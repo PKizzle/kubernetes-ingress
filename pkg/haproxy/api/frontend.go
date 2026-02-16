@@ -83,14 +83,14 @@ func (c *clientNative) FrontendDeletePending() error {
 	if err != nil {
 		return err
 	}
-	var errs utils.Errors
+	var errs []error
 	for frontendName, frontend := range c.frontends {
 		if frontend == nil {
-			errs.Add(configuration.DeleteFrontend(frontendName, c.activeTransaction, 0))
+			errs = append(errs, configuration.DeleteFrontend(frontendName, c.activeTransaction, 0))
 			delete(c.frontends, frontendName)
 		}
 	}
-	return errs.Result()
+	return errors.Join(errs...)
 }
 
 func (c *clientNative) FrontendsGet() (models.Frontends, error) {
@@ -122,7 +122,7 @@ func (c *clientNative) FrontendEdit(frontend models.FrontendBase) error {
 	return nil
 }
 
-func (c *clientNative) FrontendEnableSSLOffload(frontendName string, certDir string, alpn string, strictSNI bool, generateCertificatesSigner string) (err error) {
+func (c *clientNative) FrontendEnableSSLOffload(frontendName string, certDir string, alpn string, strictSNI bool, generateCertificatesSigner string) error {
 	binds, err := c.FrontendBindsGet(frontendName)
 	if err != nil {
 		return err
@@ -142,13 +142,10 @@ func (c *clientNative) FrontendEnableSSLOffload(frontendName string, certDir str
 		}
 		err = c.FrontendBindEdit(frontendName, *bind)
 	}
-	if err != nil {
-		return err
-	}
 	return err
 }
 
-func (c *clientNative) FrontendDisableSSLOffload(frontendName string) (err error) {
+func (c *clientNative) FrontendDisableSSLOffload(frontendName string) error {
 	binds, err := c.FrontendBindsGet(frontendName)
 	if err != nil {
 		return err
@@ -163,9 +160,6 @@ func (c *clientNative) FrontendDisableSSLOffload(frontendName string) (err error
 		bind.StrictSni = false
 		bind.GenerateCertificates = false
 		err = c.FrontendBindEdit(frontendName, *bind)
-	}
-	if err != nil {
-		return err
 	}
 	return err
 }

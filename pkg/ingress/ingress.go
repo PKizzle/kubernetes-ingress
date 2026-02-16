@@ -64,7 +64,7 @@ func (i Ingress) Supported(k8s store.K8s, a annotations.Annotations) (supported 
 	return supported
 }
 
-func (i *Ingress) handlePath(k store.K8s, h haproxy.HAProxy, host string, path *store.IngressPath, a annotations.Annotations) (err error) {
+func (i *Ingress) handlePath(k store.K8s, h haproxy.HAProxy, host string, path *store.IngressPath, a annotations.Annotations) error {
 	svc, err := service.New(k, path, h.Certificates, i.sslPassthrough, i.resource, i.resource.Annotations, k.ConfigMaps.Main.Annotations)
 	if err != nil {
 		return err

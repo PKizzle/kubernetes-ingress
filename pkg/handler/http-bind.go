@@ -15,6 +15,8 @@
 package handler
 
 import (
+	"errors"
+
 	"github.com/haproxytech/client-native/v6/models"
 
 	"github.com/haproxytech/kubernetes-ingress/pkg/annotations"
@@ -42,8 +44,8 @@ type PortAndThread struct {
 	Port   int64
 }
 
-func (handler HTTPBind) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
-	var errors utils.Errors
+func (handler HTTPBind) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
+	var errs []error
 	frontends := make(map[string]PortAndThread, 2)
 	protos := make(map[string]string, 2)
 	if handler.HTTP {
@@ -65,7 +67,7 @@ func (handler HTTPBind) Update(k store.K8s, h haproxy.HAProxy, a annotations.Ann
 		protos["v6"] = handler.IPv6Addr
 
 		// IPv6 not disabled, so add v6 listening to stats frontend
-		errors.Add(h.FrontendBindCreate("stats",
+		errs = append(errs, h.FrontendBindCreate("stats",
 			models.Bind{
 				BindParams: models.BindParams{
 					Name: "v6",
@@ -86,12 +88,11 @@ func (handler HTTPBind) Update(k store.K8s, h haproxy.HAProxy, a annotations.Ann
 				Address: addr,
 				Port:    utils.PtrInt64(ftPort),
 			}
-			if err = h.FrontendBindEdit(ftName, bind); err != nil {
-				errors.Add(h.FrontendBindCreate(ftName, bind))
+			if err := h.FrontendBindEdit(ftName, bind); err != nil {
+				errs = append(errs, h.FrontendBindCreate(ftName, bind))
 			}
 		}
 	}
-	err = errors.Result()
 	instance.Reload("New HTTP(S) bindings")
-	return err
+	return errors.Join(errs...)
 }

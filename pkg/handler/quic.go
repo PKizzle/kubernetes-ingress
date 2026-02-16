@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/haproxytech/client-native/v6/models"
@@ -30,18 +31,18 @@ type Quic struct {
 	Enabled          bool
 }
 
-func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {
+func (q *Quic) enableQUIC(h haproxy.HAProxy) error {
 	var binds []models.Bind
 	var bindIPv4Exists, bindIPv6Exists bool
 
-	err = q.altSvcRule(h)
+	err := q.altSvcRule(h)
 	if err != nil {
-		return
+		return err
 	}
 
 	existingBinds, err := h.FrontendBindsGet(h.FrontHTTPS)
 	if err != nil {
-		return
+		return err
 	}
 
 	if q.IPv4 || q.IPv6 {
@@ -87,15 +88,13 @@ func (q *Quic) enableQUIC(h haproxy.HAProxy) (err error) {
 	if len(binds) > 0 {
 		instance.Reload("QUIC enabled")
 	}
-	return
+	return nil
 }
 
-func (q *Quic) disableQUIC(h haproxy.HAProxy) (err error) {
+func (q *Quic) disableQUIC(h haproxy.HAProxy) error {
 	var bindv4Present, bindv6Present bool
-	errs := utils.Errors{}
-	binds, errBindsGet := h.FrontendBindsGet(h.FrontHTTPS)
-	if errBindsGet != nil {
-		errs.Add(errBindsGet)
+	binds, err := h.FrontendBindsGet(h.FrontHTTPS)
+	if err != nil {
 		return err
 	}
 
@@ -104,17 +103,18 @@ func (q *Quic) disableQUIC(h haproxy.HAProxy) (err error) {
 		bindv6Present = bindv6Present || bind.Name == QUIC6BIND
 	}
 
+	var errs []error
 	var changed bool
 	if q.IPv6 && bindv6Present {
 		if delErr := h.FrontendBindDelete(h.FrontHTTPS, QUIC6BIND); delErr != nil {
-			errs.Add(delErr)
+			errs = append(errs, delErr)
 		} else {
 			changed = true
 		}
 	}
 	if q.IPv4 && bindv4Present {
 		if delErr := h.FrontendBindDelete(h.FrontHTTPS, QUIC4BIND); delErr != nil {
-			errs.Add(delErr)
+			errs = append(errs, delErr)
 		} else {
 			changed = true
 		}
@@ -123,26 +123,25 @@ func (q *Quic) disableQUIC(h haproxy.HAProxy) (err error) {
 	if changed {
 		instance.Reload("QUIC disabled")
 	}
-	return errs.Result()
+	return errors.Join(errs...)
 }
 
-func (q *Quic) altSvcRule(h haproxy.HAProxy) (err error) {
-	errors := utils.Errors{}
+func (q *Quic) altSvcRule(h haproxy.HAProxy) error {
 	logger.Debug("quic redirect rule to be created")
-	errors.Add(h.AddRule(h.FrontHTTPS, rules.RequestRedirectQuic{}, false))
+	errRedirect := h.AddRule(h.FrontHTTPS, rules.RequestRedirectQuic{}, false)
 	logger.Debug("quic set header rule to be created")
-	errors.Add(h.AddRule(h.FrontHTTPS, rules.SetHdr{
+	errSetHdr := h.AddRule(h.FrontHTTPS, rules.SetHdr{
 		HdrName:   "alt-svc",
 		Response:  true,
 		HdrFormat: fmt.Sprintf("\"h3=\\\":%d\\\"; ma="+q.MaxAge+"\"", q.QuicAnnouncePort),
-	}, false))
-	return errors.Result()
+	}, false)
+	return errors.Join(errRedirect, errSetHdr)
 }
 
-func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	if !q.Enabled {
 		logger.Debug("Cannot proceed with QUIC update, it is disabled")
-		return
+		return nil
 	}
 
 	// ssl-offload
@@ -150,7 +149,7 @@ func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations)
 	if !sslOffloadEnabled {
 		logger.Warning("QUIC requires SSL offload to be enabled")
 		logger.Error(q.disableQUIC(h))
-		return
+		return nil
 	}
 
 	maxAge := common.GetValue("quic-alt-svc-max-age", k.ConfigMaps.Main.Annotations)
@@ -163,7 +162,7 @@ func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations)
 	nsSslCertificateAnn, nameSslCertificateAnn, err := common.GetK8sPath("ssl-certificate", k.ConfigMaps.Main.Annotations)
 	if err != nil || (nameSslCertificateAnn == "") {
 		logger.Error(q.disableQUIC(h))
-		return
+		return nil
 	} else {
 		namespaceSslCertificate := k.Namespaces[nsSslCertificateAnn]
 		var sslSecret *store.Secret
@@ -173,11 +172,11 @@ func (q *Quic) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations)
 
 		if sslSecret == nil || sslSecret.Status == store.DELETED {
 			logger.Error(q.disableQUIC(h))
-			return
+			return nil
 		} else {
 			logger.Error(q.enableQUIC(h))
 		}
 	}
 
-	return
+	return nil
 }

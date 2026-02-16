@@ -22,10 +22,10 @@ func (a *ReqPathRewrite) GetName() string {
 	return a.name
 }
 
-func (a *ReqPathRewrite) Process(k store.K8s, annotations ...map[string]string) (err error) {
+func (a *ReqPathRewrite) Process(k store.K8s, annotations ...map[string]string) error {
 	input := strings.TrimSpace(common.GetValue(a.GetName(), annotations...))
 	if input == "" {
-		return err
+		return nil
 	}
 	for _, rule := range strings.Split(input, "\n") {
 		parts := strings.Fields(strings.TrimSpace(rule))
@@ -47,5 +47,5 @@ func (a *ReqPathRewrite) Process(k store.K8s, annotations ...map[string]string) 
 		}
 		a.rules.Add(rewrite)
 	}
-	return err
+	return nil
 }

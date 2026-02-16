@@ -24,7 +24,7 @@ func (c *clientNative) DefaultsGetConfiguration() (defaults *models.Defaults, er
 	return defaults, err
 }
 
-func (c *clientNative) DefaultsPushConfiguration(defaults models.Defaults) (err error) {
+func (c *clientNative) DefaultsPushConfiguration(defaults models.Defaults) error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {
 		return err
@@ -41,22 +41,20 @@ func (c *clientNative) DefaultsPushConfiguration(defaults models.Defaults) (err 
 	// Use EditDefaultsSection instead of PushDefaultsConfiguration to ensure we edit the correct
 	// section by name. PushDefaultsConfiguration uses the global parser.DefaultSectionName which
 	// may not match the section we want to edit.
-	err = configuration.EditDefaultsSection(defaults.Name, &defaults, c.activeTransaction, 0)
-	if err != nil {
+	if err = configuration.EditDefaultsSection(defaults.Name, &defaults, c.activeTransaction, 0); err != nil {
 		return fmt.Errorf("unable to update HAProxy's defaults section: %w", err)
 	}
 	// Force defaults log directive to "log global"
 	// Use constants.DefaultsSectionName instead of parser.DefaultSectionName to ensure we're
 	// operating on the correct section.
 	_ = configuration.DeleteLogTarget(0, string(parser.Defaults), constants.DefaultsSectionName, c.activeTransaction, 0)
-	err = configuration.CreateLogTarget(0, string(parser.Defaults), constants.DefaultsSectionName, &models.LogTarget{Global: true}, c.activeTransaction, 0)
-	if err != nil {
+	if err = configuration.CreateLogTarget(0, string(parser.Defaults), constants.DefaultsSectionName, &models.LogTarget{Global: true}, c.activeTransaction, 0); err != nil {
 		return fmt.Errorf("unable to set 'log global' directive in defaults section: %w", err)
 	}
-	return err
+	return nil
 }
 
-func (c *clientNative) GlobalCfgSnippet(value []string) (err error) {
+func (c *clientNative) GlobalCfgSnippet(value []string) error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {
 		return err
@@ -74,7 +72,7 @@ func (c *clientNative) GlobalCfgSnippet(value []string) (err error) {
 	if err != nil {
 		return fmt.Errorf("unable to update global config snippet: %w", err)
 	}
-	return err
+	return nil
 }
 
 func (c *clientNative) GlobalGetLogTargets() (lg models.LogTargets, err error) {
@@ -121,14 +119,13 @@ func (c *clientNative) GlobalGetConfiguration() (*models.Global, error) {
 	return global, err
 }
 
-func (c *clientNative) GlobalPushConfiguration(global models.Global) (err error) {
+func (c *clientNative) GlobalPushConfiguration(global models.Global) error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {
 		return err
 	}
-	err = configuration.PushGlobalConfiguration(&global, c.activeTransaction, 0)
-	if err != nil {
+	if err = configuration.PushGlobalConfiguration(&global, c.activeTransaction, 0); err != nil {
 		return fmt.Errorf("unable to update HAProxy's global section: %w", err)
 	}
-	return err
+	return nil
 }

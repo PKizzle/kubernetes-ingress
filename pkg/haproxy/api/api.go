@@ -6,6 +6,7 @@ import (
 	"crypto/md5" // G501: Blocklisted import crypto/md5: weak cryptographic primitive
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 
 	clientnative "github.com/haproxytech/client-native/v6"
 	"github.com/haproxytech/client-native/v6/config-parser/types"
@@ -69,8 +70,8 @@ type HAProxyClient interface { //nolint:interfacebloat
 	FrontendsGet() (models.Frontends, error)
 	FrontendGet(frontendName string) (models.Frontend, error)
 	FrontendEdit(frontend models.FrontendBase) error
-	FrontendEnableSSLOffload(frontendName string, certDir string, alpn string, strictSNI bool, generateCertificatesSigner string) (err error)
-	FrontendDisableSSLOffload(frontendName string) (err error)
+	FrontendEnableSSLOffload(frontendName string, certDir string, alpn string, strictSNI bool, generateCertificatesSigner string) error
+	FrontendDisableSSLOffload(frontendName string) error
 	FrontendSSLOffloadEnabled(frontendName string) bool
 	UploadFrontends() error
 	FrontendStructured
@@ -150,13 +151,13 @@ type Bind interface {
 type Filter interface {
 	FilterCreate(id int64, parentType, parentName string, rule models.Filter) error
 	FiltersGet(parentType, parentName string) (models.Filters, error)
-	FilterDeleteAll(parentType, parentName string) (err error)
+	FilterDeleteAll(parentType, parentName string) error
 	FiltersReplace(parentType, parentName string, rules models.Filters) error
 }
 
 type Capture interface {
 	CaptureCreate(id int64, frontend string, rule models.Capture) error
-	CaptureDeleteAll(frontend string) (err error)
+	CaptureDeleteAll(frontend string) error
 	CapturesGet(frontend string) (models.Captures, error)
 	CapturesReplace(frontend string, rules models.Captures) error
 }
@@ -164,14 +165,14 @@ type Capture interface {
 type LogTarget interface {
 	LogTargetCreate(id int64, parentType, parentName string, rule models.LogTarget) error
 	LogTargetsGet(parentType, parentName string) (models.LogTargets, error)
-	LogTargetDeleteAll(parentType, parentName string) (err error)
+	LogTargetDeleteAll(parentType, parentName string) error
 	LogTargetsReplace(parentType, parentName string, rules models.LogTargets) error
 }
 
 type TCPRequestRule interface {
 	TCPRequestRuleCreate(id int64, parentType, parentName string, rule models.TCPRequestRule) error
 	TCPRequestRulesGet(parentType, parentName string) (models.TCPRequestRules, error)
-	TCPRequestRuleDeleteAll(parentType, parentName string) (err error)
+	TCPRequestRuleDeleteAll(parentType, parentName string) error
 	TCPRequestRulesReplace(parentType, parentName string, rules models.TCPRequestRules) error
 	FrontendTCPRequestRuleCreate(id int64, frontend string, rule models.TCPRequestRule, ingressACL string) error
 }
@@ -301,7 +302,7 @@ func (c *clientNative) APIFinalCommitTransaction() error {
 		return err
 	}
 
-	var errs utils.Errors
+	var errs []error
 	// First we remove all backends ...
 	deletedBackends, _ := c.BackendDeleteAllUnnecessary()
 	for _, deletedBackend := range deletedBackends {
@@ -309,11 +310,13 @@ func (c *clientNative) APIFinalCommitTransaction() error {
 	}
 	// ... then we parse the backends to take decisions.
 	for backendName, backend := range c.backends {
-		errs.Add(c.processBackend(&backend.Backend, configuration))
-		errs.AddErrors(c.processServers(backendName, configuration))
-		errs.Add(c.processConfigSnippets(backendName, backend.ConfigSnippets, configuration))
-		errs.AddErrors(c.processACLs(backendName, backend.ACLList, configuration))
-		errs.AddErrors(c.processHTTPRequestRules(backendName, backend.HTTPRequestRuleList, configuration))
+		errs = append(errs,
+			c.processBackend(&backend.Backend, configuration),
+			c.processServers(backendName, configuration),
+			c.processConfigSnippets(backendName, backend.ConfigSnippets, configuration),
+			c.processACLs(backendName, backend.ACLList, configuration),
+			c.processHTTPRequestRules(backendName, backend.HTTPRequestRuleList, configuration),
+		)
 		backend.Used = false
 		c.backends[backendName] = backend
 	}
@@ -325,12 +328,12 @@ func (c *clientNative) APIFinalCommitTransaction() error {
 
 	if c.configurationHashAtTransactionStart == hash {
 		if errDel := configuration.DeleteTransaction(c.activeTransaction); errDel != nil {
-			errs.Add(errDel)
+			errs = append(errs, errDel)
 		}
-		return errs.Result()
+		return errors.Join(errs...)
 	}
 	_, err = configuration.CommitTransaction(c.activeTransaction)
-	logger.Error(errs.Result())
+	logger.Error(errors.Join(errs...))
 	return err
 }
 
@@ -366,14 +369,14 @@ func (c *clientNative) processBackend(backend *models.Backend, configuration con
 	return nil
 }
 
-func (c *clientNative) processServers(backendName string, configuration configuration.Configuration) utils.Errors {
-	var errs utils.Errors
+func (c *clientNative) processServers(backendName string, configuration configuration.Configuration) error {
+	var errs []error
 	// Same for servers.
 	servers, _ := c.BackendServersGet(backendName)
 	for _, server := range servers {
 		errCreateServer := configuration.CreateServer("backend", backendName, server, c.activeTransaction, 0)
 		if errCreateServer != nil {
-			errs.Add(configuration.EditServer(server.Name, "backend", backendName, server, c.activeTransaction, 0))
+			errs = append(errs, configuration.EditServer(server.Name, "backend", backendName, server, c.activeTransaction, 0))
 		} else {
 			// Server has been created, a reload is required
 			// It covers the case where there was a failure, scaleHAProxySrvs has already been called in a previous loop
@@ -382,7 +385,7 @@ func (c *clientNative) processServers(backendName string, configuration configur
 			instance.Reload("server '%s' created in backend '%s'", server.Name, backendName)
 		}
 	}
-	return errs
+	return errors.Join(errs...)
 }
 
 func (c *clientNative) processConfigSnippets(backendName string, configSnippets []string, configuration configuration.Configuration) error {
@@ -397,17 +400,13 @@ func (c *clientNative) processConfigSnippets(backendName string, configSnippets 
 	return config.Set("backend", backendName, "config-snippet", nil)
 }
 
-func (c *clientNative) processACLs(backendName string, aclsList models.Acls, configuration configuration.Configuration) utils.Errors {
-	var errs utils.Errors
-	errs.Add(configuration.ReplaceAcls("backend", backendName, aclsList, c.activeTransaction, 0))
-	return errs
+func (c *clientNative) processACLs(backendName string, aclsList models.Acls, configuration configuration.Configuration) error {
+	return configuration.ReplaceAcls("backend", backendName, aclsList, c.activeTransaction, 0)
 }
 
-func (c *clientNative) processHTTPRequestRules(backendName string, httpRequestsRules models.HTTPRequestRules, configuration configuration.Configuration) utils.Errors {
-	var errs utils.Errors
+func (c *clientNative) processHTTPRequestRules(backendName string, httpRequestsRules models.HTTPRequestRules, configuration configuration.Configuration) error {
 	// we (re)create all http request rules
-	errs.Add(configuration.ReplaceHTTPRequestRules("backend", backendName, httpRequestsRules, c.activeTransaction, 0))
-	return errs
+	return configuration.ReplaceHTTPRequestRules("backend", backendName, httpRequestsRules, c.activeTransaction, 0)
 }
 
 func (c *clientNative) PushPreviousBackends() error {

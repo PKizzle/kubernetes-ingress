@@ -15,6 +15,8 @@
 package binds
 
 import (
+	"errors"
+
 	"github.com/haproxytech/client-native/v6/models"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
@@ -23,7 +25,7 @@ import (
 
 // Binds order is not important
 func ReconcileBinds(haproxy haproxy.HAProxy, frontendName string, newBinds models.Binds) error {
-	var errors utils.Errors
+	var errs []error
 	oldBinds, err := haproxy.FrontendBindsGet(frontendName)
 	if err != nil {
 		return err
@@ -32,15 +34,15 @@ func ReconcileBinds(haproxy haproxy.HAProxy, frontendName string, newBinds model
 	for _, newBind := range newBinds {
 		oldBind := findBind(newBind.Name, oldBinds)
 		if err = reconcileBind(haproxy, frontendName, oldBind, newBind); err != nil {
-			errors.Add(err)
+			errs = append(errs, err)
 		}
 	}
 
 	if errClear := clearBinds(haproxy, frontendName, oldBinds, newBinds); errClear != nil {
-		errors.Add(errClear)
+		errs = append(errs, errClear)
 	}
 
-	return errors.Result()
+	return errors.Join(errs...)
 }
 
 func reconcileBind(haproxy haproxy.HAProxy, frontendName string, oldBind, newBind *models.Bind) error {
@@ -75,7 +77,7 @@ func findBind(name string, binds models.Binds) *models.Bind {
 }
 
 func clearBinds(haproxy haproxy.HAProxy, frontendName string, oldBinds, newBinds models.Binds) error {
-	var errors utils.Errors
+	var errs []error
 
 	for _, oldBind := range oldBinds {
 		found := findBind(oldBind.Name, newBinds)
@@ -84,11 +86,11 @@ func clearBinds(haproxy haproxy.HAProxy, frontendName string, oldBinds, newBinds
 		if found == nil {
 			err := haproxy.FrontendBindDelete(frontendName, oldBind.Name)
 			if err != nil {
-				errors.Add(err)
+				errs = append(errs, err)
 				utils.GetLogger().Errorf("Error deleting frontend %s bind '%s': %s", frontendName, oldBind.Name, err)
 			}
 			instance.ReloadIf(err == nil, "Frontend %s bind '%s' deleted", frontendName, oldBind.Name)
 		}
 	}
-	return errors.Result()
+	return errors.Join(errs...)
 }

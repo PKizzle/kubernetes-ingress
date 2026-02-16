@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
 	"github.com/haproxytech/kubernetes-ingress/pkg/service"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
-	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
 
 type TCPServices struct {
@@ -28,7 +28,7 @@ type tcpSvcParser struct {
 	sslOffload bool
 }
 
-func (handler TCPServices) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (handler TCPServices) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	if k.ConfigMaps.TCPServices == nil {
 		return nil
 	}
@@ -41,6 +41,7 @@ func (handler TCPServices) Update(k store.K8s, h haproxy.HAProxy, a annotations.
 			continue
 		}
 		frontendName := "tcp-" + port
+		var err error
 		p, err = handler.parseTCPService(k, tcpSvcAnn)
 		if err != nil {
 			logger.Error(err)
@@ -66,8 +67,7 @@ func (handler TCPServices) Update(k store.K8s, h haproxy.HAProxy, a annotations.
 
 		// Create Frontend
 		if errGet != nil {
-			err = handler.createTCPFrontend(h, frontend, port, p.sslOffload)
-			if err != nil {
+			if err := handler.createTCPFrontend(h, frontend, port, p.sslOffload); err != nil {
 				logger.Error(err)
 				continue
 			}
@@ -130,7 +130,7 @@ func (handler TCPServices) clearFrontends(k store.K8s, h haproxy.HAProxy) {
 		_, isRequired := k.ConfigMaps.TCPServices.Annotations[strings.TrimPrefix(ft.Name, "tcp-")]
 		isTCPSvc := strings.HasPrefix(ft.Name, "tcp-")
 		if isTCPSvc && !isRequired {
-			err = h.FrontendDelete(ft.Name)
+			err := h.FrontendDelete(ft.Name)
 			if err != nil {
 				logger.Errorf("error deleting tcp frontend '%s': %s", ft.Name, err)
 			}
@@ -139,11 +139,11 @@ func (handler TCPServices) clearFrontends(k store.K8s, h haproxy.HAProxy) {
 	}
 }
 
-func (handler TCPServices) createTCPFrontend(h haproxy.HAProxy, frontend models.Frontend, bindPort string, sslOffload bool) (err error) {
-	var errors utils.Errors
-	errors.Add(h.FrontendCreate(frontend.FrontendBase))
+func (handler TCPServices) createTCPFrontend(h haproxy.HAProxy, frontend models.Frontend, bindPort string, sslOffload bool) error {
+	var errs []error
+	errs = append(errs, h.FrontendCreate(frontend.FrontendBase))
 	if handler.IPv4 {
-		errors.Add(h.FrontendBindCreate(frontend.Name, models.Bind{
+		errs = append(errs, h.FrontendBindCreate(frontend.Name, models.Bind{
 			Address: handler.AddrIPv4 + ":" + bindPort,
 			BindParams: models.BindParams{
 				Name: "v4",
@@ -151,7 +151,7 @@ func (handler TCPServices) createTCPFrontend(h haproxy.HAProxy, frontend models.
 		}))
 	}
 	if handler.IPv6 {
-		errors.Add(h.FrontendBindCreate(frontend.Name, models.Bind{
+		errs = append(errs, h.FrontendBindCreate(frontend.Name, models.Bind{
 			Address: handler.AddrIPv6 + ":" + bindPort,
 			BindParams: models.BindParams{
 				Name: "v6",
@@ -160,26 +160,23 @@ func (handler TCPServices) createTCPFrontend(h haproxy.HAProxy, frontend models.
 		}))
 	}
 	if sslOffload {
-		errors.Add(h.FrontendEnableSSLOffload(frontend.Name, handler.CertDir, "", false, ""))
+		errs = append(errs, h.FrontendEnableSSLOffload(frontend.Name, handler.CertDir, "", false, ""))
 	}
-	if errors.Result() != nil {
-		err = fmt.Errorf("error configuring tcp frontend: %w", err)
-		return err
+	if joinedErr := errors.Join(errs...); joinedErr != nil {
+		return fmt.Errorf("error configuring tcp frontend: %w", joinedErr)
 	}
 	instance.Reload("TCP frontend '%s' created", frontend.Name)
-	return err
+	return nil
 }
 
-func (handler TCPServices) updateTCPFrontend(k store.K8s, h haproxy.HAProxy, frontend models.Frontend, p tcpSvcParser, a annotations.Annotations) (err error) {
+func (handler TCPServices) updateTCPFrontend(k store.K8s, h haproxy.HAProxy, frontend models.Frontend, p tcpSvcParser, a annotations.Annotations) error {
 	prevFrontend, err := h.FrontendGet(frontend.Name)
 	if err != nil {
-		err = fmt.Errorf("failed to get frontend '%s' : %w", frontend.Name, err)
-		return err
+		return fmt.Errorf("failed to get frontend '%s' : %w", frontend.Name, err)
 	}
 
 	if prevFrontend.LogFormat != frontend.LogFormat {
-		err = h.FrontendEdit(frontend.FrontendBase)
-		if err != nil {
+		if err := h.FrontendEdit(frontend.FrontendBase); err != nil {
 			return err
 		}
 
@@ -187,41 +184,39 @@ func (handler TCPServices) updateTCPFrontend(k store.K8s, h haproxy.HAProxy, fro
 	}
 	binds, err := h.FrontendBindsGet(frontend.Name)
 	if err != nil {
-		err = fmt.Errorf("failed to get bind lines: %w", err)
-		return err
+		return fmt.Errorf("failed to get bind lines: %w", err)
 	}
 	if !binds[0].Ssl && p.sslOffload {
-		err = h.FrontendEnableSSLOffload(frontend.Name, handler.CertDir, "", false, "")
-		if err != nil {
-			err = fmt.Errorf("failed to enable SSL offload: %w", err)
-			return err
+		if err := h.FrontendEnableSSLOffload(frontend.Name, handler.CertDir, "", false, ""); err != nil {
+			return fmt.Errorf("failed to enable SSL offload: %w", err)
 		}
 		instance.Reload("TCP frontend '%s': ssl offload enabled", frontend.Name)
 	}
 	if binds[0].Ssl && !p.sslOffload {
-		err = h.FrontendDisableSSLOffload(frontend.Name)
-		if err != nil {
-			err = fmt.Errorf("failed to disable SSL offload: %w", err)
-			return err
+		if err := h.FrontendDisableSSLOffload(frontend.Name); err != nil {
+			return fmt.Errorf("failed to disable SSL offload: %w", err)
 		}
 		instance.Reload("TCP frontend '%s': ssl offload disabled", frontend.Name)
 	}
 	if p.service.Status == store.DELETED {
 		frontend.DefaultBackend = ""
-		err = h.FrontendEdit(frontend.FrontendBase)
+		if err := h.FrontendEdit(frontend.FrontendBase); err != nil {
+			return err
+		}
 		instance.Reload("TCP frontend '%s': service '%s/%s' deleted", frontend.Name, p.service.Namespace, p.service.Name)
-		return err
+		return nil
 	}
 
-	var svc *service.Service
 	path := &store.IngressPath{
 		SvcNamespace:     p.service.Namespace,
 		SvcName:          p.service.Name,
 		SvcPortInt:       p.port,
 		IsDefaultBackend: true,
 	}
-	if svc, err = service.New(k, path, nil, true, nil, k.ConfigMaps.Main.Annotations); err == nil {
-		err = svc.SetDefaultBackend(k, h, []string{frontend.Name}, a)
+	var svc *service.Service
+	svc, err = service.New(k, path, nil, true, nil, k.ConfigMaps.Main.Annotations)
+	if err == nil {
+		return svc.SetDefaultBackend(k, h, []string{frontend.Name}, a)
 	}
 	return err
 }

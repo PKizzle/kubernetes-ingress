@@ -28,7 +28,7 @@ import (
 
 type ProxyProtocol struct{}
 
-func (handler ProxyProtocol) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
+func (handler ProxyProtocol) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
 	//  Get annotation status
 	annProxyProtocol := a.String("proxy-protocol", k.ConfigMaps.Main.Annotations)
 	if annProxyProtocol == "" {
@@ -40,7 +40,7 @@ func (handler ProxyProtocol) Update(k store.K8s, h haproxy.HAProxy, a annotation
 		for _, address := range strings.Split(annProxyProtocol, ",") {
 			address = strings.TrimSpace(address)
 			if ip := net.ParseIP(address); ip == nil {
-				if _, _, err = net.ParseCIDR(address); err != nil {
+				if _, _, err := net.ParseCIDR(address); err != nil {
 					logger.Errorf("incorrect address '%s' in proxy-protocol annotation", address)
 					continue
 				}
@@ -55,10 +55,9 @@ func (handler ProxyProtocol) Update(k store.K8s, h haproxy.HAProxy, a annotation
 		frontends = []string{h.FrontHTTP, h.FrontSSL}
 	}
 	for _, frontend := range frontends {
-		err = h.AddRule(frontend, rules.ReqProxyProtocol{SrcIPsMap: maps.GetPath(mapName)}, false)
-		if err != nil {
+		if err := h.AddRule(frontend, rules.ReqProxyProtocol{SrcIPsMap: maps.GetPath(mapName)}, false); err != nil {
 			return err
 		}
 	}
-	return err
+	return nil
 }

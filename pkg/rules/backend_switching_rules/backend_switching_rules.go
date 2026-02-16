@@ -22,7 +22,6 @@ import (
 )
 
 func Reconcile(client api.BackendSwitchingRule, frontendName string, rules models.BackendSwitchingRules) error {
-	var errors utils.Errors
 	currentRules, err := client.BackendSwitchingRulesGet(frontendName)
 	if err != nil {
 		return err
@@ -41,5 +40,5 @@ func Reconcile(client api.BackendSwitchingRule, frontendName string, rules model
 		instance.Reload("frontend '%s', backend_switching_rule rules updated: %+v", frontendName, utils.JSONDiff(diffRules))
 	}
 
-	return errors.Result()
+	return nil
 }

@@ -31,7 +31,7 @@ func (c *clientNative) FilterCreate(id int64, parentType, parentName string, rul
 	return configuration.CreateFilter(id, parentType, parentName, &rule, c.activeTransaction, 0)
 }
 
-func (c *clientNative) FilterDeleteAll(parentType, parentName string) (err error) {
+func (c *clientNative) FilterDeleteAll(parentType, parentName string) error {
 	if parentType == "frontend" {
 		frontend, exists := c.frontends[parentName]
 		if !exists {

@@ -333,7 +333,7 @@ func (c *certs) refreshCerts(certs map[string]*cert, certDir string) {
 	}
 }
 
-func (c *certs) writeSecret(secret *store.Secret, cert *cert, isCa bool) (err error) {
+func (c *certs) writeSecret(secret *store.Secret, cert *cert, isCa bool) error {
 	var crtValue, keyValue []byte
 	var crtOk, keyOk, pemOk bool
 	var certPath string
@@ -357,8 +357,7 @@ func (c *certs) writeSecret(secret *store.Secret, cert *cert, isCa bool) (err er
 				certPath = fmt.Sprintf("%s.%s", certPath, k)
 			}
 			content := certContent(keyValue, crtValue)
-			err = c.writeCert(cert, certPath, content, isCa)
-			if err != nil {
+			if err := c.writeCert(cert, certPath, content, isCa); err != nil {
 				return err
 			}
 		}

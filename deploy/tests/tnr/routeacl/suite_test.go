@@ -40,8 +40,8 @@ type UseBackendSuite struct {
 type updateStatusManager struct{}
 
 func (m *updateStatusManager) AddIngress(ingress *ingress.Ingress) {}
-func (m *updateStatusManager) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
-	return err
+func (m *updateStatusManager) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
+	return nil
 }
 
 func TestUseBackend(t *testing.T) {

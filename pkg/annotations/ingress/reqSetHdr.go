@@ -27,10 +27,10 @@ func (a *SetHdr) GetName() string {
 	return a.name
 }
 
-func (a *SetHdr) Process(k store.K8s, annotations ...map[string]string) (err error) {
+func (a *SetHdr) Process(k store.K8s, annotations ...map[string]string) error {
 	input := common.GetValue(a.GetName(), annotations...)
 	if input == "" {
-		return err
+		return nil
 	}
 	for _, param := range strings.Split(input, "\n") {
 		if param == "" {
@@ -46,5 +46,5 @@ func (a *SetHdr) Process(k store.K8s, annotations ...map[string]string) (err err
 			Response:  a.response,
 		})
 	}
-	return err
+	return nil
 }

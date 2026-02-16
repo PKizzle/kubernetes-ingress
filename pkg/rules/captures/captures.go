@@ -22,7 +22,6 @@ import (
 )
 
 func Reconcile(client api.Capture, frontend string, rules models.Captures) error {
-	var errors utils.Errors
 	currentRules, err := client.CapturesGet(frontend)
 	if err != nil {
 		return err
@@ -40,5 +39,5 @@ func Reconcile(client api.Capture, frontend string, rules models.Captures) error
 		instance.Reload("frontend '%s', capture rules updated: %+v", frontend, utils.JSONDiff(diffRules))
 	}
 
-	return errors.Result()
+	return nil
 }

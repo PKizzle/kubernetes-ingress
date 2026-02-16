@@ -250,7 +250,6 @@ func (c *clientNative) BackendDeleteAllUnnecessary() ([]string, error) {
 		return nil, err
 	}
 
-	var errs utils.Errors
 	var backendDeleted []string //nolint:prealloc
 	for _, backend := range c.backends {
 		// if a backend is not permanent and has not been "viewed" in the transacton then remove it.
@@ -262,7 +261,7 @@ func (c *clientNative) BackendDeleteAllUnnecessary() ([]string, error) {
 		_ = configuration.DeleteBackend(backendName, c.activeTransaction, 0)
 		backendDeleted = append(backendDeleted, backendName)
 	}
-	return backendDeleted, errs.Result()
+	return backendDeleted, nil
 }
 
 // This function tests if a backend is existing AND IT'S USED.

@@ -55,9 +55,9 @@ type Proxies struct {
 }
 
 // Init initializes HAProxy Environment
-func (env *Env) Init(osArgs utils.OSArgs) (err error) {
+func (env *Env) Init(osArgs utils.OSArgs) error {
 	if osArgs.External {
-		if err = env.external(osArgs); err != nil {
+		if err := env.external(osArgs); err != nil {
 			return fmt.Errorf("unable to configure environment for external mode: %w", err)
 		}
 	}
@@ -75,11 +75,10 @@ func (env *Env) Init(osArgs utils.OSArgs) (err error) {
 		env.Binary = "echo"
 		env.RuntimeSocket = ""
 		env.MasterSocket = ""
-	} else if _, err = os.Stat(env.Binary); err != nil {
+	} else if _, err := os.Stat(env.Binary); err != nil {
 		return err
 	}
-	err = renameio.WriteFile(env.MainCFGFile, env.MainCFGRaw, 0o755)
-	if err != nil {
+	if err := renameio.WriteFile(env.MainCFGFile, env.MainCFGRaw, 0o755); err != nil {
 		return err
 	}
 	// Directories
@@ -103,17 +102,16 @@ func (env *Env) Init(osArgs utils.OSArgs) (err error) {
 		env.StateDir,
 		env.PatternDir,
 	} {
-		err = os.MkdirAll(d, 0o755)
-		if err != nil {
+		if err := os.MkdirAll(d, 0o755); err != nil {
 			return err
 		}
 	}
-	return err
+	return nil
 }
 
 // When controller is not running on a containerized
 // environment (out of Kubernetes)
-func (env *Env) external(osArgs utils.OSArgs) (err error) {
+func (env *Env) external(osArgs utils.OSArgs) error {
 	env.Binary = "/usr/local/sbin/haproxy"
 	env.MainCFGFile = "/tmp/haproxy-ingress/etc/haproxy.cfg"
 	env.CfgDir = "/tmp/haproxy-ingress/etc"
@@ -130,9 +128,9 @@ func (env *Env) external(osArgs utils.OSArgs) (err error) {
 		env.RuntimeDir = osArgs.RuntimeDir
 	}
 	for _, dir := range []string{env.CfgDir, env.RuntimeDir, env.StateDir} {
-		if err = os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
 	}
-	return err
+	return nil
 }
