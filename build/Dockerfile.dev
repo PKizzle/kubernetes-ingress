@@ -22,7 +22,7 @@ RUN gcc -O3 -Wall -g -s -o haproxy_wrapper haproxy_wrapper.c
 FROM haproxytech/haproxy-alpine:3.3.3
 
 ARG TARGETPLATFORM
-ARG S6_OVERLAY_VERSION=3.1.6.2
+ARG S6_OVERLAY_VERSION=3.2.2.0
 ENV S6_OVERLAY_VERSION=$S6_OVERLAY_VERSION
 ENV S6_READ_ONLY_ROOT=1
 ENV S6_USER=haproxy
