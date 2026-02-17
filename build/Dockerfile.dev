@@ -32,8 +32,10 @@ COPY /fs /
 COPY --from=builder-c /src/libblock_secrets.so /usr/local/lib/libblock_secrets.so
 COPY --from=builder-c /src/haproxy_wrapper /usr/local/sbin/haproxy_wrapper
 
-RUN apk --no-cache add socat openssl util-linux htop tzdata curl libcap && \
+RUN apk update && \
+    apk --no-cache add socat openssl util-linux htop tzdata curl libcap bash && \
     rm -f /usr/local/bin/dataplaneapi /usr/bin/dataplaneapi /etc/haproxy/dataplaneapi.yml && \
+    rm -f /usr/local/bin/dataplaneapi-v2 /usr/bin/dataplaneapi-v2 && \
     chown -R "${S6_USER}:${S6_GROUP}" /usr/local/etc/haproxy /run /var && \
     chmod -R ug+rwx /usr/local/etc/haproxy /run /var && \
     chmod u+rx /usr/local/sbin/haproxy_wrapper && \
@@ -59,5 +61,9 @@ RUN apk --no-cache add socat openssl util-linux htop tzdata curl libcap && \
     rm -rf /var/lib/pebble
 
 COPY kubernetes-ingress  ./haproxy-ingress-controller
+
+USER haproxy
+
+VOLUME [ "/run" ]
 
 ENTRYPOINT ["/start.sh"]
