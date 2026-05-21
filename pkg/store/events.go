@@ -120,38 +120,29 @@ func (k *K8s) EventIngress(ns *Namespace, data *Ingress, uid types.UID, resource
 	return updateRequired
 }
 
-func getEndpoints(slices map[string]*Endpoints) (endpoints map[string]PortEndpoints) {
-	endpoints = make(map[string]PortEndpoints)
+func getEndpoints(slices map[string]*Endpoints) (endpoints map[string]RuntimeEndpoints) {
+	endpoints = make(map[string]RuntimeEndpoints)
 	for _, slice := range slices {
 		if slice.Status == DELETED {
 			continue
 		}
 		for portName, portEndpoints := range slice.Ports {
 			if _, ok := endpoints[portName]; !ok {
-				endpoints[portName] = PortEndpoints{
-					Addresses: make(map[string]int64),
-				}
+				endpoints[portName] = RuntimeEndpoints{}
 			}
 			for address, port := range portEndpoints.Addresses {
-				endpoints[portName].Addresses[address] = port
+				endpoint := RuntimeEndpoint{
+					Address: address,
+					Port:    port,
+				}
+				endpoints[portName][endpoint] = struct{}{}
 			}
 		}
 	}
 	return endpoints
 }
 
-// portsChanged checks if any address has a different port between old and new endpoints.
-// This is used to detect when servers need their ports updated.
-func portsChanged(oldAddrs, newAddrs map[string]int64) bool {
-	for addr, newPort := range newAddrs {
-		if oldPort, ok := oldAddrs[addr]; ok && oldPort != newPort {
-			return true
-		}
-	}
-	return false
-}
-
-func (k *K8s) EventEndpoints(ns *Namespace, data *Endpoints, syncHAproxySrvs func(backend *RuntimeBackend, portUpdated bool) error) (updateRequired bool) {
+func (k *K8s) EventEndpoints(ns *Namespace, data *Endpoints, syncHAproxySrvs func(backend *RuntimeBackend) error) (updateRequired bool) {
 	if _, ok := ns.Endpoints[data.Service]; !ok {
 		ns.Endpoints[data.Service] = make(map[string]*Endpoints)
 	}
@@ -189,17 +180,18 @@ func (k *K8s) EventEndpoints(ns *Namespace, data *Endpoints, syncHAproxySrvs fun
 	}
 	if len(endpoints) == 0 {
 		for _, runtimeBackend := range ns.HAProxyRuntime[data.Service] {
-			runtimeBackend.Endpoints = PortEndpoints{}
+			runtimeBackend.Endpoints = RuntimeEndpoints{}
 			for _, haproxySrv := range runtimeBackend.HAProxySrvs {
 				haproxySrv.Address = ""
+				haproxySrv.Port = 1
 				haproxySrv.Modified = true
 			}
 		}
 	}
 	for portName, portEndpoints := range endpoints {
-		// Make a copy of addresses for potential standalone runtime backend
-		// as these addresses are consumed/removed in the process
-		backendAddresses := utils.CopyMap(portEndpoints.Addresses)
+		// Make a copy of endpoints for potential standalone runtime backend
+		// as these endpoints are consumed/removed in the process
+		backendEndpoints := utils.CopyMap(portEndpoints)
 		newBackend := &RuntimeBackend{Endpoints: portEndpoints}
 		backend, ok := ns.HAProxyRuntime[data.Service][portName]
 		// Make a copy of haproxy server list for potential standalone runtime backend
@@ -207,26 +199,22 @@ func (k *K8s) EventEndpoints(ns *Namespace, data *Endpoints, syncHAproxySrvs fun
 		var backendHAProxySrvs []*HAProxySrv
 		if ok {
 			backendHAProxySrvs = utils.CopySliceFunc(backend.HAProxySrvs, utils.CopyPointer)
-			portUpdated := portsChanged(backend.Endpoints.Addresses, newBackend.Endpoints.Addresses)
 			newBackend.HAProxySrvs = backend.HAProxySrvs
 			newBackend.Name = backend.Name
-			logger.Warning(syncHAproxySrvs(newBackend, portUpdated))
+			logger.Warning(syncHAproxySrvs(newBackend))
 		}
 		ns.HAProxyRuntime[data.Service][portName] = newBackend
 
 		// Reprocuce the same steps ar regular runtime backend for each standalone runtime backend
 		// referring to the same port and service
-		standaloneNewBackend := &RuntimeBackend{Endpoints: portEndpoints}
 		for standaloneBackendName, standaloneRuntimeBackend := range ns.HAProxyRuntimeStandalone[data.Service][portName] {
-			// Make own copy of regular runtime backend portEndpoint addresses
-			standaloneNewBackend.Endpoints.Addresses = utils.CopyMap(backendAddresses)
+			// Make own copy of regular runtime backend endpoints
+			standaloneNewBackend := &RuntimeBackend{Endpoints: utils.CopyMap(backendEndpoints)}
 			// Make own copy of regular runtime backend portEndpoint servers list
 			standaloneNewBackend.HAProxySrvs = utils.CopySliceFunc(backendHAProxySrvs, utils.CopyPointer)
 			standaloneNewBackend.Name = standaloneRuntimeBackend.Name
-			standalonePortUpdated := portsChanged(standaloneRuntimeBackend.Endpoints.Addresses, standaloneNewBackend.Endpoints.Addresses)
-			logger.Warning(syncHAproxySrvs(standaloneNewBackend, standalonePortUpdated))
+			logger.Warning(syncHAproxySrvs(standaloneNewBackend))
 			ns.HAProxyRuntimeStandalone[data.Service][portName][standaloneBackendName] = standaloneNewBackend
-			standaloneNewBackend = &RuntimeBackend{Endpoints: portEndpoints}
 		}
 	}
 	return true

@@ -6,7 +6,6 @@ import (
 	"crypto/md5" // G501: Blocklisted import crypto/md5: weak cryptographic primitive
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 
 	clientnative "github.com/haproxytech/client-native/v6"
 	"github.com/haproxytech/client-native/v6/config-parser/types"
@@ -42,9 +41,9 @@ type HAProxyClient interface { //nolint:interfacebloat
 	BackendExists(backendName string) bool
 	// This function tests if a backend is existing AND IT'S USED.
 	BackendUsed(backendName string) bool
-	BackendCreatePermanently(backend models.Backend)
-	BackendCreateIfNotExist(backend models.Backend)
-	BackendCreateOrUpdate(backend models.Backend) (map[string][]interface{}, bool)
+	BackendCreatePermanently(backend models.BackendBase)
+	BackendCreateIfNotExist(backend models.BackendBase)
+	BackendCreateOrUpdate(backend models.BackendBase) (map[string][]interface{}, bool)
 	BackendDelete(backendName string)
 	BackendDeleteAllUnnecessary() ([]string, error)
 	BackendCfgSnippetSet(backendName string, value []string) error
@@ -84,6 +83,14 @@ type HAProxyClient interface { //nolint:interfacebloat
 	GlobalCfgSnippet(snippet []string) error
 	GetMap(mapFile string) (*models.Map, error)
 	HTTPRequestRule
+	HTTPResponseRule
+	HTTPAfterResponseRule
+	ServerSwitchingRule
+	StickRule
+	TCPResponseRule
+	HTTPCheck
+	HTTPErrorRule
+	TCPCheck
 	LogTarget
 	TCPRequestRule
 	PeerEntryDelete(peerSection string, name string) error
@@ -92,7 +99,7 @@ type HAProxyClient interface { //nolint:interfacebloat
 	SetMapContent(mapFile string, payload []string) error
 	SetServerAddrAndState([]RuntimeServerData) error
 	SetAuxCfgFile(auxCfgFile string)
-	SyncBackendSrvs(backend *store.RuntimeBackend, portUpdated bool) error
+	SyncBackendSrvs(backend *store.RuntimeBackend) error
 	UserListDeleteAll() error
 	UserListExistsByGroup(group string) (bool, error)
 	UserListCreateByGroup(group string, userPasswordMap map[string][]byte) error
@@ -183,9 +190,65 @@ type HTTPRequestRule interface {
 	HTTPRequestRuleCreate(id int64, parentType string, parentName string, data *models.HTTPRequestRule) error
 	HTTPRequestRulesReplace(parentType, parentName string, rules models.HTTPRequestRules) error
 	FrontendHTTPRequestRuleCreate(id int64, frontend string, rule models.HTTPRequestRule, ingressACL string) error
+	FrontendHTTPAfterResponseRuleCreate(id int64, frontend string, rule models.HTTPAfterResponseRule, ingressACL string) error
+}
+
+type HTTPResponseRule interface {
+	HTTPResponseRulesGet(parentType, parentName string) (models.HTTPResponseRules, error)
+	HTTPResponseRuleDeleteAll(parentType string, parentName string) error
+	HTTPResponseRuleCreate(id int64, parentType string, parentName string, data *models.HTTPResponseRule) error
+	HTTPResponseRulesReplace(parentType, parentName string, rules models.HTTPResponseRules) error
 	FrontendHTTPResponseRuleCreate(id int64, frontend string, rule models.HTTPResponseRule, ingressACL string) error
 	FrontendHTTPAfterResponseRuleCreate(id int64, frontend string, rule models.HTTPAfterResponseRule, ingressACL string) error
-	BackendHTTPRequestRuleCreate(id int64, backend string, rule models.HTTPRequestRule) error
+}
+
+type HTTPAfterResponseRule interface {
+	HTTPAfterResponseRulesGet(parentType, parentName string) (models.HTTPAfterResponseRules, error)
+	HTTPAfterResponseRuleDeleteAll(parentType string, parentName string) error
+	HTTPAfterResponseRuleCreate(id int64, parentType string, parentName string, data *models.HTTPAfterResponseRule) error
+	HTTPAfterResponseRulesReplace(parentType, parentName string, rules models.HTTPAfterResponseRules) error
+}
+
+type ServerSwitchingRule interface {
+	ServerSwitchingRulesGet(backendName string) (models.ServerSwitchingRules, error)
+	ServerSwitchingRuleDeleteAll(backendName string) error
+	ServerSwitchingRuleCreate(id int64, backendName string, data *models.ServerSwitchingRule) error
+	ServerSwitchingRulesReplace(backendName string, rules models.ServerSwitchingRules) error
+}
+
+type StickRule interface {
+	StickRulesGet(backendName string) (models.StickRules, error)
+	StickRuleDeleteAll(backendName string) error
+	StickRuleCreate(id int64, backendName string, data *models.StickRule) error
+	StickRulesReplace(backendName string, rules models.StickRules) error
+}
+
+type TCPResponseRule interface {
+	TCPResponseRulesGet(parentType, parentName string) (models.TCPResponseRules, error)
+	TCPResponseRuleDeleteAll(parentType, parentName string) error
+	TCPResponseRuleCreate(id int64, parentType, parentName string, data *models.TCPResponseRule) error
+	TCPResponseRulesReplace(parentType, parentName string, rules models.TCPResponseRules) error
+}
+
+type HTTPCheck interface {
+	HTTPChecksGet(parentType, parentName string) (models.HTTPChecks, error)
+	HTTPCheckDeleteAll(parentType, parentName string) error
+	HTTPCheckCreate(id int64, parentType, parentName string, data *models.HTTPCheck) error
+	HTTPChecksReplace(parentType, parentName string, rules models.HTTPChecks) error
+}
+
+type HTTPErrorRule interface {
+	HTTPErrorRulesGet(parentType, parentName string) (models.HTTPErrorRules, error)
+	HTTPErrorRuleDeleteAll(parentType, parentName string) error
+	HTTPErrorRuleCreate(id int64, parentType, parentName string, data *models.HTTPErrorRule) error
+	HTTPErrorRulesReplace(parentType, parentName string, rules models.HTTPErrorRules) error
+}
+
+type TCPCheck interface {
+	TCPChecksGet(parentType, parentName string) (models.TCPChecks, error)
+	TCPCheckDeleteAll(parentType, parentName string) error
+	TCPCheckCreate(id int64, parentType, parentName string, data *models.TCPCheck) error
+	TCPChecksReplace(parentType, parentName string, rules models.TCPChecks) error
 }
 
 type Frontend struct {
@@ -213,7 +276,8 @@ func New(transactionDir, configFile, programPath, runtimeSocket string) (client 
 		return nil, err
 	}
 
-	confClient, err := configuration.New(context.Background(),
+	confClient, err := configuration.New(
+		context.Background(),
 		cfgoptions.ConfigurationFile(configFile),
 		cfgoptions.HAProxyBin(programPath),
 		cfgoptions.UseModelsValidation,
@@ -302,7 +366,7 @@ func (c *clientNative) APIFinalCommitTransaction() error {
 		return err
 	}
 
-	var errs []error
+	var errs utils.Errors
 	// First we remove all backends ...
 	deletedBackends, _ := c.BackendDeleteAllUnnecessary()
 	for _, deletedBackend := range deletedBackends {
@@ -310,13 +374,22 @@ func (c *clientNative) APIFinalCommitTransaction() error {
 	}
 	// ... then we parse the backends to take decisions.
 	for backendName, backend := range c.backends {
-		errs = append(errs,
-			c.processBackend(&backend.Backend, configuration),
-			c.processServers(backendName, configuration),
-			c.processConfigSnippets(backendName, backend.ConfigSnippets, configuration),
-			c.processACLs(backendName, backend.ACLList, configuration),
-			c.processHTTPRequestRules(backendName, backend.HTTPRequestRuleList, configuration),
-		)
+		errs.Add(c.processBackend(&backend.Backend, configuration))
+		errs.AddErrors(c.processServers(backendName, configuration))
+		errs.Add(c.processConfigSnippets(backendName, backend.ConfigSnippets, configuration))
+		errs.AddErrors(c.processACLs(backendName, backend.ACLList, configuration))
+		errs.AddErrors(c.processHTTPRequestRules(backendName, backend.HTTPRequestRuleList, configuration))
+		errs.AddErrors(c.processHTTPResponseRules(backendName, backend.HTTPResponseRuleList, configuration))
+		errs.AddErrors(c.processHTTPAfterResponseRules(backendName, backend.HTTPAfterResponseRuleList, configuration))
+		errs.AddErrors(c.processServerSwitchingRules(backendName, backend.ServerSwitchingRuleList, configuration))
+		errs.AddErrors(c.processStickRules(backendName, backend.StickRuleList, configuration))
+		errs.AddErrors(c.processTCPRequestRules(backendName, backend.TCPRequestRuleList, configuration))
+		errs.AddErrors(c.processTCPResponseRules(backendName, backend.TCPResponseRuleList, configuration))
+		errs.AddErrors(c.processFilters(backendName, backend.FilterList, configuration))
+		errs.AddErrors(c.processHTTPChecks(backendName, backend.HTTPCheckList, configuration))
+		errs.AddErrors(c.processLogTargets(backendName, backend.LogTargetList, configuration))
+		errs.AddErrors(c.processHTTPErrorRules(backendName, backend.HTTPErrorRuleList, configuration))
+		errs.AddErrors(c.processTCPChecks(backendName, backend.TCPCheckRuleList, configuration))
 		backend.Used = false
 		c.backends[backendName] = backend
 	}
@@ -328,12 +401,12 @@ func (c *clientNative) APIFinalCommitTransaction() error {
 
 	if c.configurationHashAtTransactionStart == hash {
 		if errDel := configuration.DeleteTransaction(c.activeTransaction); errDel != nil {
-			errs = append(errs, errDel)
+			errs.Add(errDel)
 		}
-		return errors.Join(errs...)
+		return errs.Result()
 	}
 	_, err = configuration.CommitTransaction(c.activeTransaction)
-	logger.Error(errors.Join(errs...))
+	logger.Error(errs.Result())
 	return err
 }
 
@@ -369,14 +442,14 @@ func (c *clientNative) processBackend(backend *models.Backend, configuration con
 	return nil
 }
 
-func (c *clientNative) processServers(backendName string, configuration configuration.Configuration) error {
-	var errs []error
+func (c *clientNative) processServers(backendName string, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
 	// Same for servers.
 	servers, _ := c.BackendServersGet(backendName)
 	for _, server := range servers {
 		errCreateServer := configuration.CreateServer("backend", backendName, server, c.activeTransaction, 0)
 		if errCreateServer != nil {
-			errs = append(errs, configuration.EditServer(server.Name, "backend", backendName, server, c.activeTransaction, 0))
+			errs.Add(configuration.EditServer(server.Name, "backend", backendName, server, c.activeTransaction, 0))
 		} else {
 			// Server has been created, a reload is required
 			// It covers the case where there was a failure, scaleHAProxySrvs has already been called in a previous loop
@@ -385,7 +458,7 @@ func (c *clientNative) processServers(backendName string, configuration configur
 			instance.Reload("server '%s' created in backend '%s'", server.Name, backendName)
 		}
 	}
-	return errors.Join(errs...)
+	return errs
 }
 
 func (c *clientNative) processConfigSnippets(backendName string, configSnippets []string, configuration configuration.Configuration) error {
@@ -400,13 +473,84 @@ func (c *clientNative) processConfigSnippets(backendName string, configSnippets 
 	return config.Set("backend", backendName, "config-snippet", nil)
 }
 
-func (c *clientNative) processACLs(backendName string, aclsList models.Acls, configuration configuration.Configuration) error {
-	return configuration.ReplaceAcls("backend", backendName, aclsList, c.activeTransaction, 0)
+func (c *clientNative) processACLs(backendName string, aclsList models.Acls, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceAcls("backend", backendName, aclsList, c.activeTransaction, 0))
+	return errs
 }
 
-func (c *clientNative) processHTTPRequestRules(backendName string, httpRequestsRules models.HTTPRequestRules, configuration configuration.Configuration) error {
+func (c *clientNative) processHTTPRequestRules(backendName string, httpRequestsRules models.HTTPRequestRules, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
 	// we (re)create all http request rules
-	return configuration.ReplaceHTTPRequestRules("backend", backendName, httpRequestsRules, c.activeTransaction, 0)
+	errs.Add(configuration.ReplaceHTTPRequestRules("backend", backendName, httpRequestsRules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processHTTPResponseRules(backendName string, httpResponsesRules models.HTTPResponseRules, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	// we (re)create all http response rules
+	errs.Add(configuration.ReplaceHTTPResponseRules("backend", backendName, httpResponsesRules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processHTTPAfterResponseRules(backendName string, rules models.HTTPAfterResponseRules, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceHTTPAfterResponseRules("backend", backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processServerSwitchingRules(backendName string, rules models.ServerSwitchingRules, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceServerSwitchingRules(backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processStickRules(backendName string, rules models.StickRules, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceStickRules(backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processTCPRequestRules(backendName string, rules models.TCPRequestRules, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceTCPRequestRules("backend", backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processTCPResponseRules(backendName string, rules models.TCPResponseRules, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceTCPResponseRules("backend", backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processFilters(backendName string, rules models.Filters, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceFilters("backend", backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processHTTPChecks(backendName string, rules models.HTTPChecks, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceHTTPChecks("backend", backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processLogTargets(backendName string, rules models.LogTargets, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceLogTargets("backend", backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processHTTPErrorRules(backendName string, rules models.HTTPErrorRules, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceHTTPErrorRules("backend", backendName, rules, c.activeTransaction, 0))
+	return errs
+}
+
+func (c *clientNative) processTCPChecks(backendName string, rules models.TCPChecks, configuration configuration.Configuration) utils.Errors {
+	var errs utils.Errors
+	errs.Add(configuration.ReplaceTCPChecks("backend", backendName, rules, c.activeTransaction, 0))
+	return errs
 }
 
 func (c *clientNative) PushPreviousBackends() error {

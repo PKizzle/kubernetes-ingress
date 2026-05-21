@@ -402,12 +402,12 @@ auth-realm: Admin Area
 
 Possible values:
 
-- secret path in "namespace/name" format.
+- secret path in "namespace/name" format. Secret should contain the CA certificate in `tls.crt` key. Multiple CAs can be provided by concatenating them in the same `tls.crt` key.
 
 Example:
 
 ```yaml
-client-ca: exp/client-ca.crt
+client-ca: exp/client-ca-secret
 ```
 
 ##### `client-crt-optional`
@@ -1316,9 +1316,11 @@ rate-limit-whitelist: "10.0.0.0/8, 192.168.1.100"
 
   :information_source: Captures samples of the request using [sample expression](#sample-expression) and log them in HAProxy traffic logs.
 
+  :information_source: **Important**: When capturing headers that may contain commas (like `User-Agent`), use `req.fhdr(header-name)` instead of `hdr(header-name)`. The `hdr()` function splits values on commas, which can result in truncated or malformed log entries. The `req.fhdr()` function returns the full header value without splitting on commas.
+
 Possible values:
 
-- A header value, e.g. `hdr(header-name)`
+- A header value, e.g. `hdr(header-name)` or `req.fhdr(header-name)` for headers with commas
 - A cookie value, e.g. `cookie(cookie-name)`
 - Multiple expressions by using a multiline YAML string
 
@@ -1332,7 +1334,7 @@ request-capture: cookie(my-cookie)
 request-capture: |
   cookie(my-cookie)
   hdr(Host)
-  hdr(User-Agent)
+  req.fhdr(user-agent)
 ```
 
 Example (ingress):
@@ -1345,7 +1347,7 @@ haproxy.org/request-capture: cookie(my-cookie)
 haproxy.org/request-capture: |
   cookie(my-cookie)
   hdr(Host)
-  hdr(User-Agent)
+  req.fhdr(user-agent)
 ```
 
 ##### `request-capture-len`

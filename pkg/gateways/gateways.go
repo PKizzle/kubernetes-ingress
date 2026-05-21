@@ -205,14 +205,13 @@ func (gm GatewayManagerImpl) manageTCPRoutes() {
 
 			// If not called on the route, the afferent backend will be automatically deleted.
 			gm.haproxyClient.BackendCreateIfNotExist(
-				models.Backend{
-					BackendBase: models.BackendBase{
-						From:          constants.DefaultsSectionName,
-						Name:          getBackendName(*tcproute),
-						Mode:          "tcp",
-						DefaultServer: &models.DefaultServer{ServerParams: models.ServerParams{Check: "enabled"}},
-					},
-				})
+				models.BackendBase{
+					From:          constants.DefaultsSectionName,
+					Name:          getBackendName(*tcproute),
+					Mode:          "tcp",
+					DefaultServer: &models.DefaultServer{ServerParams: models.ServerParams{Check: "enabled"}},
+				},
+			)
 
 			_, backendExists := gm.backends[tcpRouteBackendName]
 			instance.ReloadIf(!backendExists, "modification in backend for tcproute '%s/%s'", tcproute.Namespace, tcproute.Name)
@@ -282,7 +281,8 @@ MAIN_LOOP:
 						return "0.0.0.0"
 					}(),
 					BindParams: models.BindParams{Name: "v4"},
-				})
+				},
+			)
 			if errBinCreate != nil {
 				errs = append(errs, errBinCreate)
 				continue
@@ -299,7 +299,8 @@ MAIN_LOOP:
 						return ":::"
 					}(),
 					BindParams: models.BindParams{Name: "v6"},
-				})
+				},
+			)
 			if errBinCreate != nil {
 				errs = append(errs, errBinCreate)
 				continue

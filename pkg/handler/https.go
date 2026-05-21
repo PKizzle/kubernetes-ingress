@@ -237,15 +237,13 @@ func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) error {
 	}
 	// Create backend for proxy chaining (chaining
 	// ssl-passthrough frontend to ssl-offload backend)
-	h.BackendCreatePermanently(models.Backend{
-		BackendBase: models.BackendBase{
-			From: constants.DefaultsSectionName,
-			Name: h.BackSSL,
-			Mode: "tcp",
-		},
+	h.BackendCreatePermanently(models.BackendBase{
+		From: constants.DefaultsSectionName,
+		Name: h.BackSSL,
+		Mode: "tcp",
 	})
-	var errs []error
 
+	var errs []error
 	errs = append(errs,
 		h.BackendServerCreateOrUpdate(h.BackSSL, models.Server{
 			Name:         h.FrontHTTPS,
@@ -255,7 +253,8 @@ func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) error {
 		h.BackendSwitchingRuleCreate(0, h.FrontSSL, models.BackendSwitchingRule{
 			Name: "%[var(txn.sni_match),field(1,.)]",
 		}),
-		handler.toggleSSLPassthrough(true, h))
+		handler.toggleSSLPassthrough(true, h),
+	)
 	return errors.Join(errs...)
 }
 

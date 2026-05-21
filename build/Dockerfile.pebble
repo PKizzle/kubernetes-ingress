@@ -20,7 +20,8 @@ COPY pkg/protection/haproxy_wrapper.c .
 RUN gcc -O3 -Wall -flto -fPIC -shared -s -o libblock_secrets.so block_secrets.c -ldl
 RUN gcc -O3 -Wall -g -s -o haproxy_wrapper haproxy_wrapper.c
 
-FROM --platform=${BUILDPLATFORM} golang:1.25 AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.26 AS builder
+ENV GOTOOLCHAIN=auto
 
 ARG TARGETOS
 ARG TARGETARCH

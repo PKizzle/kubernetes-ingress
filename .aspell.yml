@@ -71,3 +71,7 @@ allowed:
   - auth
   - userlist
   - tmp
+  - kubectl
+  - PEM
+  - redact
+  - httpresponses

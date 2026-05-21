@@ -28,8 +28,20 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/api"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/certs"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/instance"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules"
 	"github.com/haproxytech/kubernetes-ingress/pkg/rules/acls"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/filters"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/httpafterresponses"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/httpchecks"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/httperrors"
 	"github.com/haproxytech/kubernetes-ingress/pkg/rules/httprequests"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/httpresponses"
+	logtargets "github.com/haproxytech/kubernetes-ingress/pkg/rules/log_targets"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/serverswitching"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/stick"
+	tcprequestrules "github.com/haproxytech/kubernetes-ingress/pkg/rules/tcp_request_rules"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/tcpchecks"
+	"github.com/haproxytech/kubernetes-ingress/pkg/rules/tcpresponses"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
@@ -149,7 +161,7 @@ func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a 
 	s.backend = &newBackend.Backend
 	backend, _ := client.BackendGet(newBackend.BackendBase.Name)
 	// Get/Create Backend
-	diff, created := client.BackendCreateOrUpdate(newBackend.Backend)
+	diff, created := client.BackendCreateOrUpdate(newBackend.BackendBase)
 	instance.ReloadIf(len(diff) > 0 || created, "Service '%s/%s': backend '%s' upserted: %v", s.resource.Namespace, s.resource.Name, newBackend.BackendBase.Name, diff)
 	s.newBackend = created
 	// if updated but not created
@@ -161,6 +173,34 @@ func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a 
 	acls.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.ACLList)
 	// HTTP requests
 	httprequests.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.HTTPRequestRuleList)
+	// HTTP responses
+	httpresponses.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.HTTPResponseRuleList)
+	// HTTP after responses
+	httpafterresponses.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.HTTPAfterResponseRuleList)
+	// Server switching
+	serverswitching.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.ServerSwitchingRuleList)
+	// Stick rules
+	stick.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.StickRuleList)
+	// TCP requests
+	if errTCP := tcprequestrules.Reconcile(client, rules.ParentTypeBackend, newBackend.BackendBase.Name, newBackend.TCPRequestRuleList); errTCP != nil {
+		logger.Error(errTCP)
+	}
+	// TCP responses
+	tcpresponses.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.TCPResponseRuleList)
+	// Filters
+	if errFilters := filters.Reconcile(client, rules.ParentTypeBackend, newBackend.BackendBase.Name, newBackend.FilterList); errFilters != nil {
+		logger.Error(errFilters)
+	}
+	// HTTP checks
+	httpchecks.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.HTTPCheckList)
+	// Log targets
+	if errLog := logtargets.Reconcile(client, rules.ParentTypeBackend, newBackend.BackendBase.Name, newBackend.LogTargetList); errLog != nil {
+		logger.Error(errLog)
+	}
+	// HTTP errors
+	httperrors.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.HTTPErrorRuleList)
+	// TCP checks
+	tcpchecks.PopulateBackend(client, newBackend.BackendBase.Name, newBackend.TCPCheckRuleList)
 
 	// config-snippet: backend
 	backendCfgSnippetHandler := annotations.NewCfgSnippet(
@@ -168,7 +208,8 @@ func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a 
 			Name:    "backend-config-snippet",
 			Backend: utils.PtrString(newBackend.BackendBase.Name),
 			Ingress: s.ingress,
-		})
+		},
+	)
 	backendCfgSnippetHandler.SetService(s.resource)
 	logger.Error(backendCfgSnippetHandler.Process(storeK8s, s.annotations...))
 	return nil

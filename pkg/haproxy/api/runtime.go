@@ -160,50 +160,45 @@ func (c *clientNative) GetMap(mapFile string) (*models.Map, error) {
 }
 
 // SyncBackendSrvs syncs states and addresses of a backend servers with corresponding endpoints.
-func (c *clientNative) SyncBackendSrvs(backend *store.RuntimeBackend, portUpdated bool) error {
+func (c *clientNative) SyncBackendSrvs(backend *store.RuntimeBackend) error {
 	logger := utils.GetLogger()
 	if backend.Name == "" {
 		return nil
 	}
 	logger.Tracef("[RUNTIME] [BACKEND] [SERVER] updating backend  %s for haproxy servers update (address and state) through socket", backend.Name)
 	haproxySrvs := backend.HAProxySrvs
-	addresses := backend.Endpoints.Addresses
+	endpoints := backend.Endpoints
 	logger.Tracef("[RUNTIME] [BACKEND] [SERVER] backend %s: list of servers %+v", backend.Name, haproxySrvs)
-	logger.Tracef("[RUNTIME] [BACKEND] [SERVER] backend %s: list of endpoints addresses %+v", backend.Name, addresses)
+	logger.Tracef("[RUNTIME] [BACKEND] [SERVER] backend %s: list of endpoints %+v", backend.Name, endpoints)
 	// Disable stale entries from HAProxySrvs
 	// and provide list of Disabled Srvs
 	var disabled []*store.HAProxySrv
 	for i, srv := range haproxySrvs {
-		srv.Modified = srv.Modified || portUpdated
-		if port, ok := addresses[srv.Address]; ok {
-			// Check if port changed for this address
-			if srv.Port != port {
-				haproxySrvs[i].Port = port
-				haproxySrvs[i].Modified = true
-			}
-			delete(addresses, srv.Address)
+		srvEndpoint := store.RuntimeEndpoint{Address: srv.Address, Port: srv.Port}
+		if _, ok := endpoints[srvEndpoint]; ok {
+			delete(endpoints, srvEndpoint)
 		} else {
 			haproxySrvs[i].Address = ""
-			haproxySrvs[i].Port = 0
+			haproxySrvs[i].Port = 1
 			haproxySrvs[i].Modified = true
 			disabled = append(disabled, srv)
 		}
 	}
 
-	// Configure new Addresses in available HAProxySrvs
-	for newAddr, port := range addresses {
+	// Configure new Endpoints in available HAProxySrvs
+	for newEndpoint := range endpoints {
 		if len(disabled) == 0 {
 			break
 		}
-		disabled[0].Address = newAddr
-		disabled[0].Port = port
+		disabled[0].Address = newEndpoint.Address
+		disabled[0].Port = newEndpoint.Port
 		disabled[0].Modified = true
 		disabled = disabled[1:]
-		delete(addresses, newAddr)
+		delete(endpoints, newEndpoint)
 	}
 
 	logger.Tracef("[RUNTIME] [BACKEND] [SERVER] backend %s: list of servers after treatment  %+v", backend.Name, haproxySrvs)
-	logger.Tracef("[RUNTIME] [BACKEND] [SERVER] backend %s: list of endpoints addresses after treatment  %+v", backend.Name, addresses)
+	logger.Tracef("[RUNTIME] [BACKEND] [SERVER] backend %s: list of endpoints after treatment  %+v", backend.Name, endpoints)
 
 	// Dynamically updates HAProxy backend servers  with HAProxySrvs content
 	runtimeServerData := make([]RuntimeServerData, 0, len(haproxySrvs))
