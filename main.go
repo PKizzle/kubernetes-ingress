@@ -258,6 +258,9 @@ func logInfo(logger utils.Logger, osArgs utils.OSArgs) bool {
 	if osArgs.DisableDelayedWritingOnlyIfReload {
 		logger.Print("Disabling the delayed writing of files to disk only in case of haproxy reload (write to disk even if no reload)")
 	}
+	if osArgs.DisableDynamicBackendManagement {
+		logger.Print("Disabling HAProxy runtime dynamic backend/server management")
+	}
 	logger.Debugf("Kubernetes Informers resync period: %s", osArgs.CacheResyncPeriod.String())
 	logger.Printf("Controller initial sync period: %s", osArgs.InitialSyncPeriod.String())
 	if osArgs.Experimental.UseIngressMerge {

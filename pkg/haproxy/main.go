@@ -64,7 +64,7 @@ func New(osArgs utils.OSArgs, env env.Env, cfgFile []byte, p process.Process, cl
 		h.Process = process.New(h.Env, osArgs, h.AuxCFGFile, h.HAProxyClient)
 	}
 	if client == nil {
-		h.HAProxyClient, err = api.New(h.CfgDir, h.MainCFGFile, h.Binary, h.RuntimeSocket)
+		h.HAProxyClient, err = api.New(h.CfgDir, h.MainCFGFile, h.Binary, h.RuntimeSocket, api.WithDynamicBackendManagementDisabled(osArgs.DisableDynamicBackendManagement))
 		if err != nil {
 			err = fmt.Errorf("failed to initialize haproxy API client: %w", err)
 			return h, err

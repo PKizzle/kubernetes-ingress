@@ -404,6 +404,15 @@ image_arguments:
     default: false
     version_min: "3.1"
     example: --disable-writing-only-if-reload
+  - argument: --disable-dynamic-backend-management
+    description: |-
+      Disable HAProxy 3.4 runtime dynamic backend/server management and keep the traditional reload-based reconciliation path.
+      This is useful when running with HAProxy builds where Dynamic Backend Management is unavailable or when operators prefer explicit reloads while the HAProxy runtime commands are still experimental upstream.
+    values:
+      - Boolean value, just need to declare the flag to disable
+    default: false
+    version_min: "3.4"
+    example: --disable-dynamic-backend-management
   - argument: --input-file
     description: |-
       This is the path to a manifest (yaml) of a v1 version to the CRDs to convert to v3.

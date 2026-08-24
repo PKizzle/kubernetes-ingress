@@ -15,6 +15,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -162,7 +163,6 @@ func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a 
 	backend, _ := client.BackendGet(newBackend.BackendBase.Name)
 	// Get/Create Backend
 	diff, created := client.BackendCreateOrUpdate(newBackend.BackendBase)
-	instance.ReloadIf(len(diff) > 0 || created, "Service '%s/%s': backend '%s' upserted: %v", s.resource.Namespace, s.resource.Name, newBackend.BackendBase.Name, diff)
 	s.newBackend = created
 	// if updated but not created
 	if len(diff) > 0 && !created {
@@ -212,7 +212,37 @@ func (s *Service) HandleBackend(storeK8s store.K8s, client api.HAProxyClient, a 
 	)
 	backendCfgSnippetHandler.SetService(s.resource)
 	logger.Error(backendCfgSnippetHandler.Process(storeK8s, s.annotations...))
+
+	s.handleBackendReload(client, newBackend.BackendBase.Name, diff, created)
 	return nil
+}
+
+func (s *Service) handleBackendReload(client api.HAProxyClient, backendName string, diff map[string][]interface{}, created bool) {
+	if len(diff) == 0 && !created {
+		return
+	}
+	if created && !s.hasRuntimeBackendBlockingAnnotations() {
+		if err := client.RuntimeBackendCreate(backendName); err == nil {
+			return
+		} else if !errors.Is(err, api.ErrRuntimeDynamicNotAvailable) && !errors.Is(err, api.ErrRuntimeBackendNotEligible) {
+			logger.Warningf("Service '%s/%s': runtime backend creation for '%s' failed, falling back to reload: %s", s.resource.Namespace, s.resource.Name, backendName, err)
+		} else {
+			logger.Debugf("Service '%s/%s': backend '%s' not managed dynamically: %s", s.resource.Namespace, s.resource.Name, backendName, err)
+		}
+	}
+	instance.ReloadIf(true, "Service '%s/%s': backend '%s' upserted: %v", s.resource.Namespace, s.resource.Name, backendName, diff)
+}
+
+func (s *Service) hasRuntimeBackendBlockingAnnotations() bool {
+	for _, ann := range s.annotations {
+		if ann == nil {
+			continue
+		}
+		if ann["route-acl"] != "" || ann["backend-config-snippet"] != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func isServersToEdit(oldBackend models.Backend, newBackend models.Backend) bool {

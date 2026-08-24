@@ -47,6 +47,7 @@ Image can be run with arguments:
 | [`--quic-announce-port`](#--quic-announce-port) |  |
 | [`--quic-bind-port`](#--quic-bind-port) |  |
 | [`--disable-writing-only-if-reload`](#--disable-writing-only-if-reload) | `false` |
+| [`--disable-dynamic-backend-management`](#--disable-dynamic-backend-management) | `false` |
 | [`--input-file`](#--input-file) |  |
 | [`--output-file`](#--output-file) |  |
 | [`--disable-ingress-status-update`](#--disable-ingress-status-update) | `false` |
@@ -834,6 +835,25 @@ Example:
 
 ```yaml
 --disable-writing-only-if-reload
+```
+
+<p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>
+
+***
+
+### `--disable-dynamic-backend-management`
+
+  Disable HAProxy 3.4 runtime dynamic backend/server management and keep the traditional reload-based reconciliation path.
+This is useful when running with HAProxy builds where Dynamic Backend Management is unavailable or when operators prefer explicit reloads while the HAProxy runtime commands are still experimental upstream.
+
+Possible values:
+
+- Boolean value, just need to declare the flag to disable
+
+Example:
+
+```yaml
+--disable-dynamic-backend-management
 ```
 
 <p align='right'><a href='#haproxy-kubernetes-ingress-controller'>:arrow_up_small: back to top</a></p>

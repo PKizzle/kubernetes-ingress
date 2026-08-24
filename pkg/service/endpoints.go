@@ -44,7 +44,7 @@ func (s *Service) HandleHAProxySrvs(k8s store.K8s, client api.HAProxyClient) {
 	backend.Name = s.backend.Name // set backendName in store.PortEndpoints for runtime updates.
 	// scale servers
 	if s.resource.DNS == "" {
-		s.scaleHAProxySrvs(backend)
+		s.scaleHAProxySrvs(backend, client)
 	}
 	// update servers
 	for _, srvSlot := range backend.HAProxySrvs {
@@ -59,6 +59,17 @@ func (s *Service) HandleHAProxySrvs(k8s store.K8s, client api.HAProxyClient) {
 }
 
 func (s *Service) updateHAProxySrv(client api.HAProxyClient, srvSlot store.HAProxySrv) {
+	srv := s.serverModel(srvSlot)
+	//revive:disable-next-line:line-length-limit
+	logger.Tracef("[CONFIG] [BACKEND] [SERVER] backend %s: about to update server in configuration file :  models.Server { Name: %s, Port: %d, Address: %s, Maintenance: %s }", s.backend.Name, srv.Name, *srv.Port, srv.Address, srv.Maintenance)
+
+	errAPI := client.BackendServerCreateOrUpdate(s.backend.Name, srv)
+	if errAPI == nil {
+		logger.Tracef("[CONFIG] [BACKEND] [SERVER] Creating/Updating server '%s/%s'", s.backend.Name, srv.Name)
+	}
+}
+
+func (s *Service) serverModel(srvSlot store.HAProxySrv) models.Server {
 	srv := models.Server{
 		Name:         srvSlot.Name,
 		Port:         utils.PtrInt64(1),
@@ -74,17 +85,15 @@ func (s *Service) updateHAProxySrv(client api.HAProxyClient, srvSlot store.HAPro
 		srv.Port = utils.PtrInt64(srvSlot.Port)
 		srv.Maintenance = "disabled"
 	}
-	//revive:disable-next-line:line-length-limit
-	logger.Tracef("[CONFIG] [BACKEND] [SERVER] backend %s: about to update server in configuration file :  models.Server { Name: %s, Port: %d, Address: %s, Maintenance: %s }", s.backend.Name, srv.Name, *srv.Port, srv.Address, srv.Maintenance)
-
-	errAPI := client.BackendServerCreateOrUpdate(s.backend.Name, srv)
-	if errAPI == nil {
-		logger.Tracef("[CONFIG] [BACKEND] [SERVER] Creating/Updating server '%s/%s'", s.backend.Name, srv.Name)
-	}
+	return srv
 }
 
 // scaleHAproxySrvs adds servers to match available addresses
-func (s *Service) scaleHAProxySrvs(backend *store.RuntimeBackend) {
+func (s *Service) scaleHAProxySrvs(backend *store.RuntimeBackend, client api.HAProxyClient) {
+	if s.dynamicServerManagementAvailable(client) {
+		s.scaleHAProxySrvsDynamic(backend, client)
+		return
+	}
 	var annVal int
 	var annErr error
 	// Add disabled HAProxySrvs to match "scale-server-slots"
@@ -155,6 +164,41 @@ func (s *Service) scaleHAProxySrvs(backend *store.RuntimeBackend) {
 	instance.ReloadIf(len(backend.HAProxySrvs) < len(slots), "[CONFIG] [BACKEND] [SERVER] Server slots in backend '%s' scaled to match available endpoints", s.backend.Name)
 	backend.Endpoints = store.RuntimeEndpoints{}
 	backend.HAProxySrvs = slots
+}
+
+func (s *Service) scaleHAProxySrvsDynamic(backend *store.RuntimeBackend, client api.HAProxyClient) {
+	slots := make([]*store.HAProxySrv, len(backend.HAProxySrvs), len(backend.HAProxySrvs)+len(backend.Endpoints))
+	copy(slots, backend.HAProxySrvs)
+	i := len(backend.HAProxySrvs)
+	for endpoint := range backend.Endpoints {
+		srv := &store.HAProxySrv{
+			Name:     fmt.Sprintf("SRV_%d", i+1),
+			Address:  endpoint.Address,
+			Port:     endpoint.Port,
+			Modified: true,
+		}
+		if err := client.RuntimeServerAdd(backend.Name, s.serverModel(*srv), s.backend.DefaultServer); err != nil {
+			backend.DynUpdateFailed = true
+			logger.Warningf("[RUNTIME] [BACKEND] [SERVER] backend '%s': unable to dynamically add server '%s', falling back to reload: %s", backend.Name, srv.Name, err)
+		}
+		slots = append(slots, srv)
+		i++
+	}
+	backend.Endpoints = store.RuntimeEndpoints{}
+	backend.HAProxySrvs = slots
+}
+
+func (s *Service) dynamicServerManagementAvailable(client api.HAProxyClient) bool {
+	if s.backend == nil || s.resource.DNS != "" {
+		return false
+	}
+	if !client.RuntimeCapabilities().DynamicServers {
+		return false
+	}
+	if s.backend.Balance != nil && s.backend.Balance.Algorithm != nil && *s.backend.Balance.Algorithm == "static-rr" {
+		return false
+	}
+	return true
 }
 
 func (s *Service) getRuntimeBackend(k8s store.K8s) (backend *store.RuntimeBackend, err error) {

@@ -96,6 +96,13 @@ type HAProxyClient interface { //nolint:interfacebloat
 	PeerEntryDelete(peerSection string, name string) error
 	PeerEntryEdit(peerSection string, peer models.PeerEntry) error
 	PeerEntryCreateOrEdit(peerSection string, peer models.PeerEntry) error
+	RuntimeCapabilities() RuntimeCapabilities
+	RuntimeBackendCreate(backendName string) error
+	RuntimeBackendPublish(backendName string) error
+	RuntimeBackendUnpublish(backendName string) error
+	RuntimeBackendDelete(backendName string) error
+	RuntimeServerAdd(backendName string, server models.Server, defaultServer *models.DefaultServer) error
+	RuntimeServerDrainAndDelete(backendName, serverName string) error
 	SetMapContent(mapFile string, payload []string) error
 	SetServerAddrAndState([]RuntimeServerData) error
 	SetAuxCfgFile(auxCfgFile string)
@@ -263,9 +270,22 @@ type clientNative struct {
 	frontends                           map[string]*Frontend
 	previousBackends                    []byte
 	configurationHashAtTransactionStart string
+	runtimeCapabilities                 RuntimeCapabilities
+	runtimeCapabilitiesChecked          bool
+	dynamicBackendManagementDisabled    bool
+	runtimeCreatedBackends              map[string]struct{}
+	runtimeCreatedServers               map[string]map[string]struct{}
 }
 
-func New(transactionDir, configFile, programPath, runtimeSocket string) (client HAProxyClient, err error) { //nolint:ireturn
+type Option func(*clientNative)
+
+func WithDynamicBackendManagementDisabled(disabled bool) Option {
+	return func(c *clientNative) {
+		c.dynamicBackendManagementDisabled = disabled
+	}
+}
+
+func New(transactionDir, configFile, programPath, runtimeSocket string, opts ...Option) (client HAProxyClient, err error) { //nolint:ireturn
 	var runtimeClient runtime.Runtime
 	if runtimeSocket != "" {
 		runtimeClient, err = runtime.New(context.Background(), runtimeoptions.Socket(runtimeSocket), runtimeoptions.DoNotCheckRuntimeOnInit)
@@ -298,9 +318,14 @@ func New(transactionDir, configFile, programPath, runtimeSocket string) (client 
 	}
 
 	cn := clientNative{
-		nativeAPI: cnHAProxyClient,
-		backends:  make(map[string]Backend),
-		frontends: make(map[string]*Frontend),
+		nativeAPI:              cnHAProxyClient,
+		backends:               make(map[string]Backend),
+		frontends:              make(map[string]*Frontend),
+		runtimeCreatedBackends: make(map[string]struct{}),
+		runtimeCreatedServers:  make(map[string]map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(&cn)
 	}
 	return &cn, nil
 }
@@ -365,6 +390,7 @@ func (c *clientNative) APIFinalCommitTransaction() error {
 	if err != nil {
 		return err
 	}
+	defer c.resetRuntimeCreatedObjects()
 
 	var errs utils.Errors
 	// First we remove all backends ...
@@ -450,7 +476,7 @@ func (c *clientNative) processServers(backendName string, configuration configur
 		errCreateServer := configuration.CreateServer("backend", backendName, server, c.activeTransaction, 0)
 		if errCreateServer != nil {
 			errs.Add(configuration.EditServer(server.Name, "backend", backendName, server, c.activeTransaction, 0))
-		} else {
+		} else if !c.runtimeServerCreated(backendName, server.Name) {
 			// Server has been created, a reload is required
 			// It covers the case where there was a failure, scaleHAProxySrvs has already been called in a previous loop
 			// but the sync failed (wrong config)
