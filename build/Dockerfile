@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM haproxytech/haproxy-alpine:3.3.10 AS builder-c
+FROM haproxytech/haproxy-alpine:3.5-dev5 AS builder-c
 RUN apk add --no-cache build-base gcc musl-dev
 WORKDIR /src
 
@@ -64,7 +64,7 @@ RUN --mount=type=cache,sharing=locked,target=/go/pkg/mod \
         -ldflags "-X github.com/haproxytech/kubernetes-ingress/pkg/version.GitTag=$(cat /var/run/vars/GIT_LAST_TAG)" \
         -o /go/haproxy-ingress-controller .
 
-FROM haproxytech/haproxy-alpine:3.3.10
+FROM haproxytech/haproxy-alpine:3.5-dev5
 
 ARG TARGETPLATFORM
 

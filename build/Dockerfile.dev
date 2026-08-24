@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM haproxytech/haproxy-alpine:3.3.10 AS builder-c
+FROM haproxytech/haproxy-alpine:3.5-dev5 AS builder-c
 RUN apk add --no-cache build-base gcc musl-dev
 WORKDIR /src
 COPY pkg/protection/block_secrets.c .
@@ -35,7 +35,7 @@ RUN gcc -O3 -std=c11 -pipe \
     -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -Wl,--as-needed \
     -o haproxy_wrapper haproxy_wrapper.c
 
-FROM haproxytech/haproxy-alpine:3.3.10
+FROM haproxytech/haproxy-alpine:3.5-dev5
 
 ARG TARGETPLATFORM
 ARG S6_OVERLAY_VERSION=3.2.2.0
