@@ -76,6 +76,16 @@ type Service struct {
 	Faked       bool
 }
 
+// RouteOwner records which ingress declared a routing map key during the current
+// reconciliation, and the value it wrote there. Two ingresses declaring the same key is not
+// a shared resource but a collision: a key has a single answer, and haproxy keeps the first
+// matching row of the map file, so the second value is unreachable. Keeping the value is what
+// lets the report say which of the two is in effect.
+type RouteOwner struct {
+	Ingress string
+	Value   string
+}
+
 // RuntimeEndpoint describes a single endpoint of a HAProxy backend
 type RuntimeEndpoint struct {
 	Address string
@@ -299,4 +309,18 @@ type ReferenceGrantTo struct {
 	Name  *string
 	Group string
 	Kind  string
+}
+
+// BackendOwner records which ingress constituted a backend during the current
+// reconciliation, and the mode it asked for.
+//
+// A backend name derives from (namespace, service, port name), not from the ingress, so
+// several ingresses referencing the same service port share one backend. Its definition
+// - mode, balance, options - is rebuilt from scratch out of the annotations of the
+// ingress being processed and replaces the previous one wholesale, so it can only ever
+// reflect one of them. The first one to reference it owns it; the others get their route
+// and share its servers.
+type BackendOwner struct {
+	Ingress     string // namespace/name of the ingress which built the backend
+	Passthrough bool   // mode it asked for
 }

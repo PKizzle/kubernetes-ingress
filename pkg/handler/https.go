@@ -30,6 +30,7 @@ import (
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/maps"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/rules"
 	"github.com/haproxytech/kubernetes-ingress/pkg/route"
+	bindsrules "github.com/haproxytech/kubernetes-ingress/pkg/rules/binds"
 	"github.com/haproxytech/kubernetes-ingress/pkg/store"
 	"github.com/haproxytech/kubernetes-ingress/pkg/utils"
 )
@@ -55,30 +56,33 @@ const (
 	BIND_IP_V6                      = "v6"
 )
 
-func (handler HTTPS) bindList(h haproxy.HAProxy) (binds []models.Bind) {
-	addBind := func(address string, name string, v4v6 bool) {
-		binds = append(binds, models.Bind{
-			Name:    name,
-			Address: address,
+func (handler *HTTPS) bindList(h haproxy.HAProxy) (binds models.Binds) {
+	if handler.IPv4 {
+		binds = append(binds, &models.Bind{
+			Name:    BIND_IP_V4,
+			Address: handler.AddrIPv4,
 			Port:    utils.PtrInt64(handler.Port),
 			BindParams: models.BindParams{
 				AcceptProxy: false,
-				V4v6:        v4v6,
 			},
 		})
 	}
-
-	if handler.IPv4 {
-		addBind(handler.AddrIPv4, "v4", false)
-	}
 	if handler.IPv6 {
-		addBind(handler.AddrIPv6, "v6", true)
+		binds = append(binds, &models.Bind{
+			Name:    BIND_IP_V6,
+			Address: handler.AddrIPv6,
+			Port:    utils.PtrInt64(handler.Port),
+			BindParams: models.BindParams{
+				AcceptProxy: false,
+				V4v6:        true,
+			},
+		})
 	}
 	return binds
 }
 
-func (handler *HTTPS) bindListPassthrough(h haproxy.HAProxy) (binds []models.Bind) {
-	binds = append(binds, models.Bind{
+func (handler *HTTPS) bindListPassthrough(h haproxy.HAProxy) (binds models.Binds) {
+	binds = append(binds, &models.Bind{
 		Name:    BIND_UNIX_SOCKET,
 		Address: "unix@" + handler.unixSocketPath(h),
 		BindParams: models.BindParams{
@@ -92,7 +96,7 @@ func (handler *HTTPS) unixSocketPath(h haproxy.HAProxy) string {
 	return path.Join(h.Env.RuntimeDir, "ssl-frontend.sock")
 }
 
-func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) error {
+func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) (err error) {
 	// Parsing
 	var caFile string
 	var notFound store.ErrNotFound
@@ -104,16 +108,17 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) error 
 		logger.Warningf("client TLS Auth: %s", annErr)
 	}
 	if secret != nil {
-		var err error
 		caFile, err = h.Certificates.AddSecret(secret, certs.CA_CERT)
 		if err != nil {
-			return fmt.Errorf("client TLS Auth: %w", err)
+			err = fmt.Errorf("client TLS Auth: %w", err)
+			return err
 		}
 	}
 
 	binds, bindsErr := h.FrontendBindsGet(h.FrontHTTPS)
 	if bindsErr != nil {
-		return fmt.Errorf("client TLS Auth: %w", bindsErr)
+		err = fmt.Errorf("client TLS Auth: %w", bindsErr)
+		return err
 	}
 
 	var enabled bool
@@ -126,7 +131,7 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) error 
 
 	// No changes
 	if binds[0].SslCafile == caFile && (caFile == "" || binds[0].Verify == verify) {
-		return nil
+		return err
 	}
 	// Removing config
 	if caFile == "" {
@@ -134,36 +139,52 @@ func (handler *HTTPS) handleClientTLSAuth(k store.K8s, h haproxy.HAProxy) error 
 		for i := range binds {
 			binds[i].SslCafile = ""
 			binds[i].Verify = ""
-			if err := h.FrontendBindEdit(h.FrontHTTPS, *binds[i]); err != nil {
+			if err = h.FrontendBindEdit(h.FrontHTTPS, *binds[i]); err != nil {
 				return err
 			}
 		}
 		instance.Reload("removed client TLS authentication")
-		return nil
+		return err
 	}
 	// Updating config
 	logger.Info("configuring client TLS authentication")
 	for i := range binds {
 		binds[i].SslCafile = caFile
 		binds[i].Verify = verify
-		if err := h.FrontendBindEdit(h.FrontHTTPS, *binds[i]); err != nil {
+		if err = h.FrontendBindEdit(h.FrontHTTPS, *binds[i]); err != nil {
 			return err
 		}
 	}
 	instance.Reload("configured client TLS authentication")
-	return nil
+	return err
 }
 
-func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) error {
+func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annotations) (err error) {
 	if !handler.Enabled {
 		logger.Debug("Cannot proceed with SSL Passthrough update, HTTPS is disabled")
 		return nil
 	}
 
+	var errs utils.Errors
+
+	// The proxy-chaining backend is only ever referenced by the ssl frontend
+	// default_backend, never by an ingress path, so no reconciliation marks it as
+	// used and only its "permanent" flag keeps it alive. That flag is in-memory
+	// state which a rollback after a failed transaction wipes out, so it has to be
+	// re-asserted on every single sync, or BackendDeleteAllUnnecessary()
+	// garbage-collects the backend while the frontend still points at it and every
+	// later transaction is rejected with "unable to find required default_backend".
+	//
+	// Hence doing it here, before anything that can fail: it depends on nothing else
+	// this handler computes, while everything below can give up on an unrelated
+	// error, a malformed generate-certificates-signer annotation being enough.
+	if haproxy.SSLPassthrough {
+		errs.Add(handler.ensureSSLPassthroughBackend(h))
+	}
+
 	// Fetch tls-alpn value for when SSL offloading is enabled
 	handler.alpn = a.String("tls-alpn", k.ConfigMaps.Main.Annotations)
 
-	var err error
 	handler.strictSNI, err = annotations.Bool("client-strict-sni", k.ConfigMaps.Main.Annotations)
 	logger.Error(err)
 
@@ -173,14 +194,21 @@ func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annot
 	secret, annErr := annotations.Secret("generate-certificates-signer", "", k, k.ConfigMaps.Main.Annotations)
 	if annErr != nil {
 		if !errors.Is(annErr, notFound) {
-			return fmt.Errorf("generate-certificates-signer: %w", annErr)
+			// The signer feeds FrontendEnableSSLOffload(), which both the ssl-offload
+			// section below and toggleSSLPassthrough() call. Applying either with an
+			// unresolved signer would silently drop it from the binds, so give up
+			// rather than downgrade the frontend. The invariant above is already
+			// applied at this point.
+			errs.Add(fmt.Errorf("generate-certificates-signer: %w", annErr))
+			return errs.Result()
 		}
 		logger.Debugf("generate-certificates-signer not configured: %s", annErr)
 	}
 	if secret != nil {
 		caFile, certErr := h.Certificates.AddSecret(secret, certs.FT_CERT)
 		if certErr != nil {
-			return fmt.Errorf("generate-certificates-signer: %w", certErr)
+			errs.Add(fmt.Errorf("generate-certificates-signer: %w", certErr))
+			return errs.Result()
 		}
 		handler.generateCertificatesSigner = caFile
 	}
@@ -192,10 +220,10 @@ func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annot
 			logger.Panic(h.FrontendEnableSSLOffload(h.FrontHTTPS, handler.CertDir, handler.alpn, handler.strictSNI, handler.generateCertificatesSigner))
 			instance.Reload("SSL offload enabled")
 		}
-		err := handler.handleClientTLSAuth(k, h)
-		if err != nil {
-			return err
-		}
+		// Client TLS authentication is self-contained: failing to configure it says
+		// nothing about the ssl-passthrough configuration below, so collect the error
+		// instead of skipping the rest of the handler.
+		errs.Add(handler.handleClientTLSAuth(k, h))
 	} else if sslOffloadEnabled {
 		logger.Panic(h.FrontendDisableSSLOffload(h.FrontHTTPS))
 		instance.Reload("SSL offload disabled")
@@ -207,6 +235,8 @@ func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annot
 			logger.Error(handler.enableSSLPassthrough(h))
 			instance.Reload("SSLPassthrough enabled")
 		}
+		// The chaining backend is re-asserted at the top of this function, out of
+		// reach of the early returns above.
 		logger.Error(handler.sslPassthroughRules(k, h, a))
 	} else if errFtSSL == nil {
 		logger.Error(handler.disableSSLPassthrough(h))
@@ -215,10 +245,10 @@ func (handler *HTTPS) Update(k store.K8s, h haproxy.HAProxy, a annotations.Annot
 
 	instance.ReloadIf(h.CertsUpdated(), "certificates updated")
 
-	return nil
+	return errs.Result()
 }
 
-func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) error {
+func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) (err error) {
 	// Create TCP frontend for ssl-passthrough
 	frontend := models.FrontendBase{
 		Name:           h.FrontSSL,
@@ -226,40 +256,56 @@ func (handler *HTTPS) enableSSLPassthrough(h haproxy.HAProxy) error {
 		LogFormat:      "'%ci:%cp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs SNI: %[var(sess.sni)]'",
 		DefaultBackend: h.BackSSL,
 	}
-	err := h.FrontendCreate(frontend)
+	var errors utils.Errors
+
+	err = h.FrontendCreate(frontend)
 	if err != nil {
 		return err
 	}
-	for _, b := range handler.bindList(h) {
-		if err = h.FrontendBindCreate(h.FrontSSL, b); err != nil {
-			return fmt.Errorf("cannot create bind for SSL Passthrough: %w", err)
-		}
+	// Declare the binds through the generic reconciliation instead of creating them
+	// blindly: this function is called from the reconciliation loop, which re-enters
+	// it on an already set up passthrough, and FrontendBindCreate() rejects a bind
+	// that is already declared. Reconciling compares against the binds in place, so
+	// an already correct bind is a no-op instead of an error, and only a real change
+	// asks for a reload. What is left is therefore a genuine failure: give up, since
+	// nothing declared after this point could be trusted and the in-memory state has
+	// no rollback.
+	if err = bindsrules.ReconcileBinds(h, h.FrontSSL, handler.bindList(h)); err != nil {
+		return fmt.Errorf("cannot reconcile binds for SSL Passthrough: %w", err)
 	}
 	// Create backend for proxy chaining (chaining
 	// ssl-passthrough frontend to ssl-offload backend)
-	h.BackendCreatePermanently(models.BackendBase{
-		From: constants.DefaultsSectionName,
-		Name: h.BackSSL,
-		Mode: "tcp",
-	})
-
-	var errs []error
-	errs = append(errs,
-		h.BackendServerCreateOrUpdate(h.BackSSL, models.Server{
-			Name:         h.FrontHTTPS,
-			Address:      "unix@" + handler.unixSocketPath(h),
-			ServerParams: models.ServerParams{SendProxyV2: "enabled"},
-		}),
+	errors.Add(
+		handler.ensureSSLPassthroughBackend(h),
 		h.BackendSwitchingRuleCreate(0, h.FrontSSL, models.BackendSwitchingRule{
 			Name: "%[var(txn.sni_match),field(1,.)]",
 		}),
 		handler.toggleSSLPassthrough(true, h),
 	)
-	return errors.Join(errs...)
+	return errors.Result()
 }
 
-func (handler *HTTPS) disableSSLPassthrough(h haproxy.HAProxy) error {
-	err := h.FrontendDelete(h.FrontSSL)
+// ensureSSLPassthroughBackend declares the backend chaining the ssl-passthrough
+// frontend to the ssl-offload one, and marks it permanent so that it is never
+// garbage-collected while it is referenced as the ssl frontend default_backend.
+// It is idempotent: both the backend and its server are create-or-update
+// operations, so calling it on every sync leaves an already correct
+// configuration untouched and requests no reload.
+func (handler *HTTPS) ensureSSLPassthroughBackend(h haproxy.HAProxy) error {
+	h.BackendCreatePermanently(models.BackendBase{
+		From: constants.DefaultsSectionName,
+		Name: h.BackSSL,
+		Mode: "tcp",
+	})
+	return h.BackendServerCreateOrUpdate(h.BackSSL, models.Server{
+		Name:         h.FrontHTTPS,
+		Address:      "unix@" + handler.unixSocketPath(h),
+		ServerParams: models.ServerParams{SendProxyV2: "enabled"},
+	})
+}
+
+func (handler *HTTPS) disableSSLPassthrough(h haproxy.HAProxy) (err error) {
+	err = h.FrontendDelete(h.FrontSSL)
 	if err != nil {
 		return err
 	}
@@ -268,14 +314,16 @@ func (handler *HTTPS) disableSSLPassthrough(h haproxy.HAProxy) error {
 	return handler.toggleSSLPassthrough(false, h)
 }
 
-func (handler *HTTPS) toggleSSLPassthrough(passthrough bool, h haproxy.HAProxy) error {
+func (handler *HTTPS) toggleSSLPassthrough(passthrough bool, h haproxy.HAProxy) (err error) {
 	handler.deleteHTTPSFrontendBinds(h)
 	bindListFunc := handler.bindList
 	if passthrough {
 		bindListFunc = handler.bindListPassthrough
 	}
 	for _, bind := range bindListFunc(h) {
-		if err := h.FrontendBindCreate(h.FrontHTTPS, bind); err != nil {
+		// Not ReconcileBinds() here: the https frontend also carries binds this
+		// handler does not own (quic), which the reconciliation would delete.
+		if err = h.FrontendBindCreate(h.FrontHTTPS, *bind); err != nil {
 			return err
 		}
 	}
@@ -302,7 +350,8 @@ func (handler *HTTPS) sslPassthroughRules(k store.K8s, h haproxy.HAProxy, a anno
 		}
 		inspectTimeout = utils.PtrInt64(5000)
 	}
-	errs := []error{
+	errors := utils.Errors{}
+	errors.Add(
 		h.Rules.AddRule(h.FrontSSL, rules.ReqAcceptContent{}, false),
 		h.Rules.AddRule(h.FrontSSL, rules.ReqInspectDelay{
 			Timeout: inspectTimeout,
@@ -323,6 +372,6 @@ func (handler *HTTPS) sslPassthroughRules(k store.K8s, h haproxy.HAProxy, a anno
 			Expression: fmt.Sprintf("req_ssl_sni,regsub(^[^.]*,,),map(%s)", maps.GetPath(route.SNI)),
 			CondTest:   "!{ var(txn.sni_match) -m found }",
 		}, false),
-	}
-	return errors.Join(errs...)
+	)
+	return errors.Result()
 }

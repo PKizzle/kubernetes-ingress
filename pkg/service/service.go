@@ -24,6 +24,7 @@ import (
 
 	v3 "github.com/haproxytech/kubernetes-ingress/crs/api/ingress/v3"
 	"github.com/haproxytech/kubernetes-ingress/pkg/annotations"
+	serviceann "github.com/haproxytech/kubernetes-ingress/pkg/annotations/service"
 	"github.com/haproxytech/kubernetes-ingress/pkg/controller/constants"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy"
 	"github.com/haproxytech/kubernetes-ingress/pkg/haproxy/api"
@@ -270,6 +271,16 @@ func (s *Service) getBackendModel(store store.K8s, a annotations.Annotations, cl
 	// get/create backend Model
 	backend, err = annotations.ModelBackend("cr-backend", s.resource.Namespace, store, s.annotations...)
 	logger.Warning(err)
+	if backend != nil {
+		// Deep-copy the CR object before mutating it: multiple services may share the
+		// same cr-backend annotation and therefore the same *v3.BackendSpec pointer in
+		// the store.  Without a copy, mutations below (BackendBase.Name, Servers map,
+		// etc.) bleed across services, causing one backend's server list to contaminate
+		// another's.
+		var backendCopy v3.BackendSpec
+		backend.DeepCopyInto(&backendCopy)
+		backend = &backendCopy
+	}
 	if backend == nil {
 		backend = &v3.BackendSpec{
 			Backend: models.Backend{
@@ -284,6 +295,19 @@ func (s *Service) getBackendModel(store store.K8s, a annotations.Annotations, cl
 			if err != nil {
 				logger.Errorf("service '%s/%s': annotation '%s': %s", s.resource.Namespace, s.resource.Name, a.GetName(), err)
 			}
+		}
+		// cookie-persistence is resolved against the Service annotations, falling
+		// back to the ConfigMap default, but NEVER the ingress annotations. The
+		// backend is shared across every ingress referencing this service, so
+		// honoring the ingress source would let two ingresses set divergent cookie
+		// configs on the same backend, causing non-deterministic config churn. The
+		// ConfigMap is a single global default and stays safe. Hence it is handled
+		// here rather than in the generic a.Backend() group, and must run before
+		// the DynamicCookieKey block below. Service takes precedence over ConfigMap
+		// (GetValue returns the first source where the key is set).
+		cookieAnn := serviceann.NewCookie("cookie-persistence", &backend.Backend)
+		if cookieErr := cookieAnn.Process(store, s.resource.Annotations, store.ConfigMaps.Main.Annotations); cookieErr != nil {
+			logger.Errorf("service '%s/%s': annotation '%s': %s", s.resource.Namespace, s.resource.Name, cookieAnn.GetName(), cookieErr)
 		}
 	}
 

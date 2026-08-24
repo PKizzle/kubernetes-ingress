@@ -39,8 +39,8 @@ more info about custom annotations can be found in [annotations-custom.md](annot
 | [frontend-config-snippet](#config-snippet) | string |  |  |:large_blue_circle:|:white_circle:|:white_circle:|
 | [stats-config-snippet](#config-snippet) | string |  |  |:large_blue_circle:|:white_circle:|:white_circle:|
 | [backend-config-snippet](#config-snippet) | string |  |  |:large_blue_circle:|:large_blue_circle:|:large_blue_circle:|
-| [cookie-persistence](#cookie-persistence) | string |  |  |:large_blue_circle:|:large_blue_circle:|:large_blue_circle:|
-| [cookie-persistence-no-dynamic](#cookie-persistence-no-dynamic) | string |  |  |:large_blue_circle:|:large_blue_circle:|:large_blue_circle:|
+| [cookie-persistence](#cookie-persistence) | string |  |  |:large_blue_circle:|:white_circle:|:large_blue_circle:|
+| [cookie-persistence-no-dynamic](#cookie-persistence-no-dynamic) | string |  |  |:large_blue_circle:|:white_circle:|:large_blue_circle:|
 | [dontlognull](#logging) | [bool](#bool) | "true" |  |:large_blue_circle:|:white_circle:|:white_circle:|
 | [src-ip-header](#src-ip-header) | string | "null" |  |:large_blue_circle:|:large_blue_circle:|:white_circle:|
 | [forwarded-for](#x-forwarded-for) | [bool](#bool) | "true" |  |:large_blue_circle:|:large_blue_circle:|:large_blue_circle:|
@@ -690,9 +690,11 @@ backend-config-snippet: |
   Enables persistent connections (sticky sessions) between a client and a pod by inserting a cookie into the client's browser that is used to remember which backend pod they connected to before.
   Dynamic cookies are used by default via a [dynamic-cookie-key](https://cbonte.github.io/haproxy-dconv/2.4/configuration.html#4.2-dynamic-cookie-key) in order to support sticky sessions across multiple Ingress Controller instances/replicas.
 
-  Available on:  `configmap`  `ingress`  `service`
+  Available on:  `configmap`  `service`
 
   :information_source: This will insert the following cookie configuration in the corresponding backend `cookie <cookie-name> insert indirect nocache dynamic` with `<cookie-name>` the value of this annotation.
+
+  :information_source: This annotation is resolved at the service level, falling back to the configmap default. As the HAProxy backend is shared by every ingress referencing the same service, setting it on an ingress is ignored to avoid a non-deterministic backend configuration. The service value takes precedence over the configmap default.
 
 Possible values:
 
@@ -715,11 +717,13 @@ cookie-persistence: "mycookie"
   Enables persistent connections (sticky sessions) between a client and a pod by inserting a cookie into the client's browser that is used to remember which backend pod they connected to before.
   Dynamic cookies are not used contrary to cookie-persistence annotation. The cookie will have the server name.
 
-  Available on:  `configmap`  `ingress`  `service`
+  Available on:  `configmap`  `service`
 
   :information_source: This will insert the following cookie configuration in the corresponding backend
 `cookie <cokkie-name> indirect nocache insert` with `<cookie-name>` the value of this annotation.
 The server line will have `server <server-name> <server-address> enabled cookie <server-name>`
+
+  :information_source: This annotation is resolved at the service level, falling back to the configmap default. As the HAProxy backend is shared by every ingress referencing the same service, setting it on an ingress is ignored to avoid a non-deterministic backend configuration. The service value takes precedence over the configmap default.
 
 Possible values:
 
@@ -830,6 +834,10 @@ http-server-close: "true"
   :information_source: Traffic is proxied in TCP mode which makes unavailable a number of the controller annotations (requiring HTTP mode).
 
   :information_source: HTTPS frontend is conserved and still listening at port 8444 when previous HTTPS port is moved to SSL Frontend.
+
+  :information_source: This annotation is resolved per ingress path, against the service the path points at, then the ingress carrying it, then the configmap default. The service value takes precedence over the ingress one, so a single ingress can route one path to a service which terminates TLS itself and another to a service which does not.
+
+  :information_source: Prefer setting it on the service, as it describes the service rather than the route reaching it. A HAProxy backend is shared by every ingress referencing the same service port and has a single mode, so ingresses disagreeing on this annotation cannot all be served; setting it on the service makes them agree.
 
 Possible values:
 

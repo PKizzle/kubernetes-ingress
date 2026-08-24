@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/go-test/deep"
@@ -64,6 +65,10 @@ type HAProxyController struct {
 	auxCfgModTime            int64
 	ready                    bool
 	processIngress           func()
+	// defaultBackend holds, for the current reconciliation pass, the ingress
+	// deterministically selected to provide the frontends' default backend.
+	// Reset before each processIngress() run and consumed by setIngressDefaultBackend().
+	defaultBackend *store.Ingress
 }
 
 // Wrapping a Native-Client transaction and commit it.
@@ -155,7 +160,10 @@ func (c *HAProxyController) updateHAProxy() {
 		logger.Error(err)
 	}
 
+	c.processSSLPassthroughInConfigFile()
+	c.defaultBackend = nil
 	c.processIngress()
+	c.setIngressDefaultBackend()
 
 	updated := deep.Equal(route.CurentCustomRoutes, route.CustomRoutes, deep.FLAG_IGNORE_SLICE_ORDER)
 	if len(updated) != 0 {
@@ -187,7 +195,8 @@ func (c *HAProxyController) updateHAProxy() {
 			logger.Debug("disabling some config snippets because of errors")
 			// We need to replay all these resources.
 			c.store.SecretsProcessed = map[string]struct{}{}
-			c.store.BackendsProcessed = map[string]struct{}{}
+			c.store.BackendsProcessed = map[string]store.BackendOwner{}
+			c.store.RoutesProcessedByMapFile = map[string]map[string]store.RouteOwner{}
 			c.updateHAProxy()
 			return
 		}
@@ -219,7 +228,8 @@ func (c *HAProxyController) updateHAProxy() {
 				logger.Debug("disabling some config snippets because of errors")
 				// We need to replay all these resources.
 				c.store.SecretsProcessed = map[string]struct{}{}
-				c.store.BackendsProcessed = map[string]struct{}{}
+				c.store.BackendsProcessed = map[string]store.BackendOwner{}
+				c.store.RoutesProcessedByMapFile = map[string]map[string]store.RouteOwner{}
 				c.updateHAProxy()
 				return
 			}
@@ -346,7 +356,8 @@ func (c *HAProxyController) setupHAProxyRules() error {
 func (c *HAProxyController) clean(failedSync bool) {
 	c.haproxy.Clean()
 	// Need to do that even if transaction failed otherwise at fix time, they won't be reprocessed.
-	c.store.BackendsProcessed = map[string]struct{}{}
+	c.store.BackendsProcessed = map[string]store.BackendOwner{}
+	c.store.RoutesProcessedByMapFile = map[string]map[string]store.RouteOwner{}
 	logger.Error(c.setupHAProxyRules())
 	if !failedSync {
 		c.store.Clean()
@@ -364,6 +375,7 @@ func (c *HAProxyController) manageIngress(ing *store.Ingress) {
 		logger.Debugf("ingress '%s/%s' ignored: no matching", ing.Namespace, ing.Name)
 	} else {
 		i.Update(c.store, c.haproxy, c.annotations)
+		c.considerDefaultBackend(ing)
 	}
 	if ing.Status == store.ADDED || ing.ClassUpdated {
 		c.updateStatusManager.AddIngress(i)
@@ -372,10 +384,22 @@ func (c *HAProxyController) manageIngress(ing *store.Ingress) {
 
 //revive:disable-next-line:cognitive-complexity
 func (c *HAProxyController) processIngressesWithMerge() {
-	for _, namespace := range c.store.Namespaces {
+	// Namespaces and services are walked by name for the same reason as in
+	// processIngressesDefaultImplementation: rules are created in processing order and
+	// RefreshRules replays them in that order, so a random walk produced a different
+	// configuration text on every pass, hence a commit and a reload with nothing having
+	// changed.
+	//
+	// The ingresses of a service need no sorting here: IngressesByService is an ordered
+	// set, oldest first with the namespace and name settling equal creation times
+	// (pkg/store/events.go), which is the order backend ownership needs. That same order
+	// decides which annotation value wins the merge below, the first one found being kept,
+	// so the established ingress has precedence there too. The two go together: reversing
+	// the set without reversing the merge would give precedence to the newest ingress.
+	for _, namespace := range sortedByKey(c.store.Namespaces) {
 		c.store.SecretsProcessed = map[string]struct{}{}
 		// Iterate over services
-		for _, service := range namespace.Services {
+		for _, service := range sortedByKey(namespace.Services) {
 			ingressesOrderedList := c.store.IngressesByService[service.Namespace+"/"+service.Name]
 			if ingressesOrderedList == nil {
 				continue
@@ -405,12 +429,16 @@ func (c *HAProxyController) processIngressesWithMerge() {
 			annotationsFromAllIngresses := map[string]string{}
 
 			for _, ingressToMerge := range ingressesToMerge {
-				// Gather all annotations from all ingresses referring to the service in a consistent order based on ingress name.
+				// Gather all annotations from all ingresses referring to the service. The list
+				// is ordered oldest first and the first value found is the one kept, so the
+				// established ingress has precedence - the same rule as backend ownership.
 				for ann, value := range ingressToMerge.Annotations {
 					if _, specific := annotations.SpecificAnnotations[ann]; specific {
 						continue
 					}
-					annotationsFromAllIngresses[ann] = value
+					if _, alreadySet := annotationsFromAllIngresses[ann]; !alreadySet {
+						annotationsFromAllIngresses[ann] = value
+					}
 				}
 			}
 
@@ -460,10 +488,57 @@ func (c *HAProxyController) processIngressesWithMerge() {
 	}
 }
 
+// sortedByKey returns the values of m ordered by their key, so that walking a Go map
+// — whose iteration order is randomized on every pass — becomes reproducible.
+func sortedByKey[V any](m map[string]V) []V {
+	out := make([]V, 0, len(m))
+	for _, key := range slices.Sorted(maps0.Keys(m)) {
+		out = append(out, m[key])
+	}
+	return out
+}
+
+// sortedIngresses returns the ingresses ordered by creation time, oldest first, and by
+// name for those created within the same second — Kubernetes stores creationTimestamp
+// with second granularity, so ingresses applied together commonly tie.
+//
+// Ownership of a shared backend goes to the first ingress processed, so ordering by age
+// is what makes it belong to the oldest one. Ordering by name would only protect an
+// established backend from newcomers whose name happens to sort after: one named to sort
+// before would still take it over, reconfigure it and force a reload, which is precisely
+// what ownership is meant to prevent.
+//
+// Ingresses sharing a backend are always in the same namespace, since an ingress can
+// only reference services of its own namespace and the backend name carries that
+// namespace. Ordering within a namespace is therefore enough, and the namespaces
+// themselves can keep being walked by name.
+func sortedIngresses(m map[string]*store.Ingress) []*store.Ingress {
+	out := make([]*store.Ingress, 0, len(m))
+	for _, ing := range m {
+		out = append(out, ing)
+	}
+	slices.SortFunc(out, func(a, b *store.Ingress) int {
+		if byAge := a.CreationTime.Compare(b.CreationTime); byAge != 0 {
+			return byAge
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	return out
+}
+
 func (c *HAProxyController) processIngressesDefaultImplementation() {
-	for _, namespace := range c.store.Namespaces {
+	// Namespaces are walked by name and ingresses by age. Several
+	// decisions taken while walking depend on that order, the mode of a backend shared
+	// by two ingresses being the sharpest one: a backend name derives from
+	// (namespace, service, port name) and getBackendModel rebuilds its whole definition
+	// from the annotations of the single ingress being processed, so the last one
+	// processed wins. With map iteration order, that winner changed on every
+	// reconciliation, and with it the backend mode, balance algorithm and options.
+	// Sorting does not resolve the conflict — Ingress.claimBackendMode reports it — but
+	// it makes the outcome reproducible and diagnosable.
+	for _, namespace := range sortedByKey(c.store.Namespaces) {
 		c.store.SecretsProcessed = map[string]struct{}{}
-		for _, ingResource := range namespace.Ingresses {
+		for _, ingResource := range sortedIngresses(namespace.Ingresses) {
 			if !namespace.Relevant && !ingResource.Faked {
 				// As we watch only for white-listed namespaces, we should not worry about iterating over
 				// many ingresses in irrelevant namespaces.
@@ -473,4 +548,64 @@ func (c *HAProxyController) processIngressesDefaultImplementation() {
 			c.manageIngress(ingResource)
 		}
 	}
+}
+
+// processSSLPassthroughInConfigFile turns the ssl-passthrough topology on as soon as a
+// single ingress needs it: the tcp ssl frontend is created and the https bind moves behind
+// it. That decision has to be taken before the ingresses are processed, since the frontend
+// a route is attached to depends on it, hence this separate pass.
+func (c *HAProxyController) processSSLPassthroughInConfigFile() {
+	for _, namespace := range c.store.Namespaces {
+		for _, ingResource := range namespace.Ingresses {
+			if !namespace.Relevant && !ingResource.Faked {
+				// As we watch only for white-listed namespaces, we should not worry about iterating over
+				// many ingresses in irrelevant namespaces.
+				// There should only be fake ingresses in irrelevant namespaces so loop should be whithin small amount of ingresses (Prometheus)
+				continue
+			}
+			if c.sslPassthroughRequested(ingResource) {
+				haproxy.SSLPassthrough = true
+				return
+			}
+		}
+	}
+}
+
+// sslPassthroughRequested reports whether any traffic of this ingress is to be served in
+// passthrough mode.
+//
+// The annotation being resolved against the service a path points at, the question is
+// asked per path. An ingress declaring no rule has no path to ask about, so it is resolved
+// from its own annotations and from the configmap - which keeps it able to turn the
+// topology on, as it was before the service scope existed.
+//
+// A spec.defaultBackend is deliberately not consulted, although it does carry a service.
+// Kubernetes allows it in place of the rules, so a rule-less ingress may well have one, but
+// a default backend cannot be served in passthrough: it takes the mode of the frontends it
+// is attached to, and passthrough routing is keyed on sni.map, which only carries host
+// entries, while a default backend is what serves the requests no host matched. Consulting
+// it would move the https bind of the whole controller for a backend no passthrough route
+// can reach. reportPassthroughOnDefaultBackend warns about the annotation instead.
+func (c *HAProxyController) sslPassthroughRequested(ingResource *store.Ingress) bool {
+	report := func(err error) {
+		logger.Errorf("Ingress '%s/%s': SSL Passthrough parsing: %s", ingResource.Namespace, ingResource.Name, err)
+	}
+	if len(ingResource.Rules) == 0 {
+		enabled, err := annotations.Bool("ssl-passthrough", ingResource.Annotations, c.store.ConfigMaps.Main.Annotations)
+		if err != nil {
+			report(err)
+		}
+		return enabled
+	}
+	for _, rule := range ingResource.Rules {
+		for _, path := range rule.Paths {
+			enabled, err := ingress.SSLPassthroughEnabled(c.store, path, ingResource.Annotations)
+			if err != nil {
+				report(err)
+			} else if enabled {
+				return true
+			}
+		}
+	}
+	return false
 }
