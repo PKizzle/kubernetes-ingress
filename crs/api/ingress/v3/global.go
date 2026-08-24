@@ -22,7 +22,7 @@ import (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:metadata:annotations="haproxy.org/client-native=v6.2.6"
+// +kubebuilder:metadata:annotations="haproxy.org/client-native=v6.3.8"
 // +kubebuilder:validation:XValidation:rule="!has(self.spec.default_path)", message="spec.config.default_path is set by ingress controller internally"
 // +kubebuilder:validation:XValidation:rule="!has(self.spec.pidfile)", message="spec.config.pidfile is set by ingress controller internally"
 // +kubebuilder:validation:XValidation:rule="!has(self.spec.localpeer)", message="spec.config.localpeer is set by ingress controller internally"

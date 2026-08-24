@@ -58,10 +58,10 @@ const (
 func (handler HTTPS) bindList(h haproxy.HAProxy) (binds []models.Bind) {
 	addBind := func(address string, name string, v4v6 bool) {
 		binds = append(binds, models.Bind{
+			Name:    name,
 			Address: address,
 			Port:    utils.PtrInt64(handler.Port),
 			BindParams: models.BindParams{
-				Name:        name,
 				AcceptProxy: false,
 				V4v6:        v4v6,
 			},
@@ -79,9 +79,9 @@ func (handler HTTPS) bindList(h haproxy.HAProxy) (binds []models.Bind) {
 
 func (handler *HTTPS) bindListPassthrough(h haproxy.HAProxy) (binds []models.Bind) {
 	binds = append(binds, models.Bind{
+		Name:    BIND_UNIX_SOCKET,
 		Address: "unix@" + handler.unixSocketPath(h),
 		BindParams: models.BindParams{
-			Name:        BIND_UNIX_SOCKET,
 			AcceptProxy: true,
 		},
 	})

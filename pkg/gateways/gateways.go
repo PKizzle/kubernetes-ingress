@@ -273,6 +273,7 @@ MAIN_LOOP:
 		if !gm.osArgs.DisableIPV4 {
 			errBinCreate := gm.haproxyClient.FrontendBindCreate(
 				frontendName, models.Bind{
+					Name: "v4",
 					Port: &port,
 					Address: func() string {
 						if gm.osArgs.IPV4BindAddr != "" {
@@ -280,7 +281,7 @@ MAIN_LOOP:
 						}
 						return "0.0.0.0"
 					}(),
-					BindParams: models.BindParams{Name: "v4"},
+					BindParams: models.BindParams{},
 				},
 			)
 			if errBinCreate != nil {
@@ -291,6 +292,7 @@ MAIN_LOOP:
 		if !gm.osArgs.DisableIPV6 {
 			errBinCreate := gm.haproxyClient.FrontendBindCreate(
 				frontendName, models.Bind{
+					Name: "v6",
 					Port: &port,
 					Address: func() string {
 						if gm.osArgs.IPV6BindAddr != "" {
@@ -298,7 +300,7 @@ MAIN_LOOP:
 						}
 						return ":::"
 					}(),
-					BindParams: models.BindParams{Name: "v6"},
+					BindParams: models.BindParams{},
 				},
 			)
 			if errBinCreate != nil {

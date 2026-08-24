@@ -144,17 +144,16 @@ func (handler TCPServices) createTCPFrontend(h haproxy.HAProxy, frontend models.
 	errs = append(errs, h.FrontendCreate(frontend.FrontendBase))
 	if handler.IPv4 {
 		errs = append(errs, h.FrontendBindCreate(frontend.Name, models.Bind{
-			Address: handler.AddrIPv4 + ":" + bindPort,
-			BindParams: models.BindParams{
-				Name: "v4",
-			},
+			Name:       "v4",
+			Address:    handler.AddrIPv4 + ":" + bindPort,
+			BindParams: models.BindParams{},
 		}))
 	}
 	if handler.IPv6 {
 		errs = append(errs, h.FrontendBindCreate(frontend.Name, models.Bind{
+			Name:    "v6",
 			Address: handler.AddrIPv6 + ":" + bindPort,
 			BindParams: models.BindParams{
-				Name: "v6",
 				V4v6: true,
 			},
 		}))

@@ -58,10 +58,10 @@ func (q *Quic) enableQUIC(h haproxy.HAProxy) error {
 
 	addBind := func(addr string, bindName string, v4v6 bool) {
 		binds = append(binds, models.Bind{
+			Name:    bindName,
 			Address: addr,
 			Port:    utils.PtrInt64(q.QuicBindPort),
 			BindParams: models.BindParams{
-				Name:           bindName,
 				Ssl:            true,
 				SslCertificate: q.CertDir,
 				Alpn:           "h3",

@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    haproxy.org/client-native: v6.2.6
+    haproxy.org/client-native: v6.3.8
   name: backends.ingress.v3.haproxy.org
 spec:
   group: ingress.v3.haproxy.org
@@ -406,6 +406,9 @@ spec:
                         - enabled
                         - disabled
                       type: string
+                    cc:
+                      description: cc
+                      type: string
                     check:
                       description: |-
                         check
@@ -461,6 +464,14 @@ spec:
                         check proto
                         Pattern: ^[^\s]+$
                       pattern: ^[^\s]+$
+                      type: string
+                    check_sni_auto:
+                      description: |-
+                        check sni auto
+                        Enum: ["enabled","disabled"]
+                      enum:
+                        - enabled
+                        - disabled
                       type: string
                     check_via_socks4:
                       description: |-
@@ -610,6 +621,14 @@ spec:
                       format: int64
                       minimum: 0
                       type: integer
+                    ktls:
+                      description: |-
+                        ktls
+                        Enum: ["on","off"]
+                      enum:
+                        - "on"
+                        - "off"
+                      type: string
                     log-bufsize:
                       description: log bufsize
                       format: int64
@@ -767,6 +786,14 @@ spec:
                     redir:
                       description: redir
                       type: string
+                    renegotiate:
+                      description: |-
+                        Toggles the secure renegotiation mechanism for an SSL backend.
+                        Enum: ["enabled","disabled"]
+                      enum:
+                        - enabled
+                        - disabled
+                      type: string
                     resolve-net:
                       description: |-
                         resolve net
@@ -866,6 +893,14 @@ spec:
                         Pattern: ^[^\s]+$
                       pattern: ^[^\s]+$
                       type: string
+                    sni_auto:
+                      description: |-
+                        sni auto
+                        Enum: ["enabled","disabled"]
+                      enum:
+                        - enabled
+                        - disabled
+                      type: string
                     socks4:
                       description: |-
                         socks4
@@ -944,6 +979,12 @@ spec:
                     strict-maxconn:
                       description: strict maxconn
                       type: boolean
+                    tcp_md5sig:
+                      description: |-
+                        tcp md5sig
+                        Pattern: ^[^\s]+$
+                      pattern: ^[^\s]+$
+                      type: string
                     tcp_ut:
                       description: |-
                         tcp ut
@@ -2957,7 +2998,7 @@ spec:
                     - safe
                   type: string
                 http_send_name_header:
-                  description: http send name header
+                  description: The header string to use to send the server name
                   type: string
                 httpchk_params:
                   description: httpchk params
@@ -3349,7 +3390,7 @@ spec:
                       ServerSwitchingRule Server Switching Rule
 
                       HAProxy server switching rule configuration (corresponds to use-server directive)
-                      Example: {"cond":"if","cond_test":"{ req_ssl_sni -i www.example.com }","target_server":"www"}
+                      Example: {"cond":"if","cond_test":"{ req.ssl_sni -i www.example.com }","target_server":"www"}
 
                       swagger:model server_switching_rule
                     properties:
@@ -3437,6 +3478,9 @@ spec:
                           - enabled
                           - disabled
                         type: string
+                      cc:
+                        description: cc
+                        type: string
                       check:
                         description: |-
                           check
@@ -3492,6 +3536,14 @@ spec:
                           check proto
                           Pattern: ^[^\s]+$
                         pattern: ^[^\s]+$
+                        type: string
+                      check_sni_auto:
+                        description: |-
+                          check sni auto
+                          Enum: ["enabled","disabled"]
+                        enum:
+                          - enabled
+                          - disabled
                         type: string
                       check_via_socks4:
                         description: |-
@@ -3650,6 +3702,14 @@ spec:
                         format: int64
                         minimum: 0
                         type: integer
+                      ktls:
+                        description: |-
+                          ktls
+                          Enum: ["on","off"]
+                        enum:
+                          - "on"
+                          - "off"
+                        type: string
                       log-bufsize:
                         description: log bufsize
                         format: int64
@@ -3830,6 +3890,14 @@ spec:
                       redir:
                         description: redir
                         type: string
+                      renegotiate:
+                        description: |-
+                          Toggles the secure renegotiation mechanism for an SSL backend.
+                          Enum: ["enabled","disabled"]
+                        enum:
+                          - enabled
+                          - disabled
+                        type: string
                       resolve-net:
                         description: |-
                           resolve net
@@ -3929,6 +3997,14 @@ spec:
                           Pattern: ^[^\s]+$
                         pattern: ^[^\s]+$
                         type: string
+                      sni_auto:
+                        description: |-
+                          sni auto
+                          Enum: ["enabled","disabled"]
+                        enum:
+                          - enabled
+                          - disabled
+                        type: string
                       socks4:
                         description: |-
                           socks4
@@ -4007,6 +4083,12 @@ spec:
                       strict-maxconn:
                         description: strict maxconn
                         type: boolean
+                      tcp_md5sig:
+                        description: |-
+                          tcp md5sig
+                          Pattern: ^[^\s]+$
+                        pattern: ^[^\s]+$
+                        type: string
                       tcp_ut:
                         description: |-
                           tcp ut

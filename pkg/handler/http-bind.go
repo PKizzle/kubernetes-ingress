@@ -69,8 +69,8 @@ func (handler HTTPBind) Update(k store.K8s, h haproxy.HAProxy, a annotations.Ann
 		// IPv6 not disabled, so add v6 listening to stats frontend
 		errs = append(errs, h.FrontendBindCreate("stats",
 			models.Bind{
+				Name: "v6",
 				BindParams: models.BindParams{
-					Name: "v6",
 					V4v6: false,
 				},
 				Address: ":::1024",
@@ -81,8 +81,8 @@ func (handler HTTPBind) Update(k store.K8s, h haproxy.HAProxy, a annotations.Ann
 		thread := ftPortAndThread.Thread
 		for proto, addr := range protos {
 			bind := models.Bind{
+				Name: proto,
 				BindParams: models.BindParams{
-					Name:   proto,
 					Thread: thread,
 				},
 				Address: addr,

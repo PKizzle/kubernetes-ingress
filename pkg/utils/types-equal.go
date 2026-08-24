@@ -14,13 +14,13 @@
 
 package utils
 
-import "github.com/haproxytech/client-native/v6/models"
+import "github.com/haproxytech/go-method-gen/pkg/eqdiff"
 
 type Equalizer[T any] interface {
-	Equal(t T, opt ...models.Options) bool
+	Equal(t T, opt ...eqdiff.GoMethodGenOptions) bool
 }
 
-func EqualSlice[T Equalizer[T]](sliceA, sliceB []T, opt ...models.Options) bool {
+func EqualSlice[T Equalizer[T]](sliceA, sliceB []T, opt ...eqdiff.GoMethodGenOptions) bool {
 	if len(sliceA) != len(sliceB) {
 		return false
 	}
@@ -52,7 +52,7 @@ func EqualPointers[P Literal](a, b *P) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil) && *a == *b
 }
 
-func EqualPointersEqualizer[P Equalizer[P]](a, b *P, opt ...models.Options) bool {
+func EqualPointersEqualizer[P Equalizer[P]](a, b *P, opt ...eqdiff.GoMethodGenOptions) bool {
 	return (a == nil && b == nil) || ((a != nil && b != nil) && (*a).Equal(*b, opt...))
 }
 
