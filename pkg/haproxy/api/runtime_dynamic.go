@@ -153,6 +153,16 @@ func (c *clientNative) RuntimeServerAdd(backendName string, server models.Server
 	if err = runtime.AddServer(runtimeSafeToken(backendName), runtimeSafeToken(server.Name), attributes); err != nil {
 		return fmt.Errorf("runtime add server %s/%s: %w", backendName, server.Name, err)
 	}
+	// "add server" instantiates the server in maintenance. Unless it is meant to stay
+	// disabled it has to be enabled explicitly, otherwise the backend keeps answering
+	// 503 with no server available.
+	if effectiveServerParams(server.ServerParams, defaultServer).Maintenance != "enabled" {
+		if err = runtime.EnableServer(runtimeSafeToken(backendName), runtimeSafeToken(server.Name)); err != nil {
+			return fmt.Errorf("runtime enable server %s/%s: %w", backendName, server.Name, err)
+		}
+	}
+	// Only record the server once it is actually serving: the caller relies on this to
+	// decide whether the reload that would apply the configuration file can be skipped.
 	c.recordRuntimeCreatedServer(backendName, server.Name)
 	logger.Infof("[RUNTIME] [BACKEND] [SERVER] dynamically added server '%s/%s'", backendName, server.Name)
 	return nil
@@ -167,6 +177,15 @@ func (c *clientNative) RuntimeServerDrainAndDelete(backendName, serverName strin
 	serverRef := backend + "/" + server
 	cmd := "disable server " + serverRef + ";shutdown sessions server " + serverRef + ";wait srv-removable " + serverRef + ";del server " + serverRef
 	if _, err := c.ExecuteRaw(cmd); err != nil {
+		// The leading "disable server" of the sequence has already been applied, so put the
+		// server back in rotation rather than leaving it stranded in maintenance.
+		runtimeClient, errRuntime := c.nativeAPI.Runtime()
+		if errRuntime == nil {
+			errRuntime = runtimeClient.EnableServer(backend, server)
+		}
+		if errRuntime != nil {
+			logger.Errorf("[RUNTIME] [BACKEND] [SERVER] unable to restore server '%s' after a failed drain: %s", serverRef, errRuntime)
+		}
 		return err
 	}
 	if servers, ok := c.runtimeCreatedServers[backendName]; ok {
