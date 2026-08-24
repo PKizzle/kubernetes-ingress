@@ -16,6 +16,7 @@ package controller
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/haproxytech/client-native/v6/models"
@@ -86,6 +87,11 @@ func (c *HAProxyController) globalCfg() {
 	// SetGlobal may inject a default log target into newLg, so assign it afterwards;
 	// otherwise the comparison misses it and triggers a reload on every sync.
 	newGlobal.LogTargetList = newLg
+	// The tune sections are allocated up front so the annotation and env handlers can
+	// write into them without a nil check. One that stayed empty has to go back to nil:
+	// the parsed configuration carries no such section, so an empty struct compares
+	// different from it and every sync would request a reload.
+	clearEmptyTuneOptions(newGlobal)
 	diff := newGlobal.Diff(*global)
 	if len(diff) != 0 {
 		err := c.haproxy.GlobalPushConfiguration(*newGlobal)
@@ -99,6 +105,15 @@ func (c *HAProxyController) globalCfg() {
 		instance.Reload("Global log targets updated: %+v", utils.JSONDiff(diff))
 	}
 	c.globalCfgSnipp()
+}
+
+func clearEmptyTuneOptions(global *models.Global) {
+	if global.TuneOptions != nil && reflect.ValueOf(*global.TuneOptions).IsZero() {
+		global.TuneOptions = nil
+	}
+	if global.TuneSslOptions != nil && reflect.ValueOf(*global.TuneSslOptions).IsZero() {
+		global.TuneSslOptions = nil
+	}
 }
 
 func (c *HAProxyController) globalCfgSnipp() {
